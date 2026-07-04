@@ -1,0 +1,8 @@
+[functions.admin-users]
+verify_jwt = true
+
+[functions.payment-sms]
+verify_jwt = true
+
+[functions.payment-link]
+verify_jwt = true
