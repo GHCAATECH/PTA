@@ -5,6 +5,7 @@ import { useAuth } from "./features/auth/auth-context";
 import Login from "./pages/login";
 import Dashboard from "./pages/dashboard";
 import Students from "./pages/students";
+import ArchivedStudents from "./pages/archived-students";
 import StudentProfile from "./pages/student-profile";
 import RecordPayment from "./pages/record-payment";
 import Payments from "./pages/payments";
@@ -59,34 +60,14 @@ export default function App() {
       <Route element={<Protected />}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="students" element={<Students />} />
+        <Route path="students/archived" element={<ArchivedStudents />} />
         <Route path="students/:id" element={<StudentProfile />} />
         <Route path="payments/new" element={<RecordPayment />} />
         <Route path="payments" element={<Payments />} />
         <Route path="reports" element={<Reports />} />
-        <Route
-          path="setup"
-          element={
-            <AdminOnly>
-              <Setup />
-            </AdminOnly>
-          }
-        />
-        <Route
-          path="users"
-          element={
-            <AdminOnly>
-              <UsersPage />
-            </AdminOnly>
-          }
-        />
-        <Route
-          path="settings"
-          element={
-            <AdminOnly>
-              <SettingsPage />
-            </AdminOnly>
-          }
-        />
+        <Route path="setup" element={<AdminOnly><Setup /></AdminOnly>} />
+        <Route path="users" element={<AdminOnly><UsersPage /></AdminOnly>} />
+        <Route path="settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
