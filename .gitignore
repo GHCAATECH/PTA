@@ -1,0 +1,9 @@
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+frontend/vite-error.log
+frontend/vite.log
+frontend/*.tsbuildinfo
+
+.DS_Store
+Thumbs.db
