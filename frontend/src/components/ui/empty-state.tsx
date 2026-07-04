@@ -1,2 +1,0 @@
-import { FileSearch } from 'lucide-react'
-export function EmptyState({title='Nothing here yet',message='Try changing your filters or add a new record.'}:{title?:string;message?:string}){return <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center"><div className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10"><FileSearch/></div><p className="font-semibold">{title}</p><p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{message}</p></div>}
