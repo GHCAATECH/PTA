@@ -159,21 +159,6 @@ export const api = {
       outstanding_balance: Number(data.outstanding_balance),
     } as Payment;
   },
-  async paymentHistory(studentId: string): Promise<Payment[]> {
-    const { data, error } = await supabase
-      .from("payment_receipts")
-      .select("*")
-      .eq("student_id", studentId)
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((p: any) => ({
-      ...p,
-      amount_paid: Number(p.amount_paid),
-      total_paid: Number(p.total_paid),
-      outstanding_balance: Number(p.outstanding_balance),
-    })) as Payment[];
-  },
   async dashboardStats(academicYearId?: string): Promise<DashboardStats> {
     const year = academicYearId
       ? await supabase

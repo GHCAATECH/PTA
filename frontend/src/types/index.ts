@@ -47,7 +47,6 @@ export interface Payment {
   received_by_name: string;
   total_paid: number;
   outstanding_balance: number;
-  payment_history?: Payment[];
 }
 export interface DashboardStats {
   total_students: number;
