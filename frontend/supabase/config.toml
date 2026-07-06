@@ -5,4 +5,4 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.payment-link]
-verify_jwt = true
+verify_jwt = false
