@@ -205,7 +205,7 @@ export default function StudentPortal() {
                 Welcome, {student.first_name}.
               </h1>
               <p className="mt-1 text-sm text-indigo-100">
-                {student.admission_number} Ãƒâ€šÃ‚Â· {student.classes?.name}
+                {student.admission_number} ? {student.classes?.name}
               </p>
             </div>
           </div>
@@ -312,7 +312,7 @@ export default function StudentPortal() {
               <Info
                 icon={GraduationCap}
                 label="Class"
-                value={student.classes?.name ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                value={student.classes?.name ?? "Not assigned"}
               />
               <Info
                 icon={CalendarDays}
