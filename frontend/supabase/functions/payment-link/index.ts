@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
 function resolveStudentRedirectUrl(configured: string | null | undefined) {
   const saved = configured?.trim();
   if (saved) return saved;
-  return "https://schooldashborad.com/student";
+  return "https://schooldashborad.com/#/student";
 }
 
 function buildFunctionCallbackUrl(req: Request) {
@@ -27,6 +27,29 @@ function buildFunctionCallbackUrl(req: Request) {
 }
 
 function redirectWithParams(baseUrl: string, params: Record<string, string>) {
+  const hashIndex = baseUrl.indexOf("#");
+
+  if (hashIndex >= 0) {
+    const beforeHash = baseUrl.slice(0, hashIndex);
+    const hashPart = baseUrl.slice(hashIndex + 1);
+    const normalizedHash = hashPart.startsWith("/") ? hashPart : "/" + hashPart;
+    const hashUrl = new URL(normalizedHash, "https://codex.local");
+
+    for (const [key, value] of Object.entries(params)) {
+      if (value) hashUrl.searchParams.set(key, value);
+    }
+
+    const target = beforeHash + "#" + hashUrl.pathname + hashUrl.search;
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: target,
+      },
+    });
+  }
+
   const url = new URL(baseUrl);
   for (const [key, value] of Object.entries(params)) {
     if (value) url.searchParams.set(key, value);
