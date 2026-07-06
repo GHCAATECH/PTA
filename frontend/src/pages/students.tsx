@@ -305,6 +305,8 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
           .replaceAll(" ", "_"),
       );
       let count = 0;
+      let skipped = 0;
+      const defaultClass = classes[0] ?? null;
       for (let i = 2; i <= ws.rowCount; i++) {
         const rowValues = Array.from({ length: headers.length }, (_, index) =>
           ws.getRow(i).getCell(index + 1).value,
@@ -314,17 +316,27 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
             .map((header, index) => [header, rowValues[index]] as const)
             .filter(([header]) => header),
         );
+        const admissionNumber = String(row.admission_number ?? "").trim().toUpperCase();
+        const firstName = String(row.first_name ?? "").trim();
+        const lastName = String(row.last_name ?? "").trim();
         const className = String(row.class ?? row.class_name ?? "").trim();
-        const schoolClass = classes.find(
-          (c) => c.name.toLowerCase() === className.toLowerCase(),
-        );
-        if (!row.admission_number || !row.first_name || !row.last_name || !schoolClass) continue;
+        const rowIsEmpty = !admissionNumber && !firstName && !lastName && !className;
+        if (rowIsEmpty) continue;
+
+        const schoolClass =
+          classes.find((c) => c.name.toLowerCase() === className.toLowerCase()) ?? defaultClass;
+
+        if (!admissionNumber || !firstName || !lastName || !schoolClass) {
+          skipped++;
+          continue;
+        }
+
         const created = await api.createStudent({
-          admission_number: String(row.admission_number).trim().toUpperCase(),
-          first_name: String(row.first_name).trim(),
-          last_name: String(row.last_name).trim(),
-          gender: (["Male", "Female", "Other"].includes(String(row.gender))
-            ? String(row.gender)
+          admission_number: admissionNumber,
+          first_name: firstName,
+          last_name: lastName,
+          gender: (["Male", "Female", "Other"].includes(String(row.gender ?? "").trim())
+            ? String(row.gender ?? "").trim()
             : "Other") as Student["gender"],
           class_id: schoolClass.id,
           parent_name: String(row.parent_name ?? "").trim() || "Not provided",
@@ -332,13 +344,19 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
           address: String(row.address ?? "").trim(),
           status: "active",
         });
-        if (String(row.password ?? "").length >= 8) {
-          await adminUsers.setStudentCredentials(created.id, String(row.password));
+        const password = String(row.password ?? "").trim();
+        if (password.length >= 8) {
+          await adminUsers.setStudentCredentials(created.id, password);
         }
         count++;
       }
       await queryClient.invalidateQueries({ queryKey: ["students"] });
-      toast.success(`${count} students imported successfully`);
+      if (count) {
+        const extra = skipped ? ' ' + skipped + ' row(s) skipped.' : '';
+        toast.success(count + ' student(s) imported successfully.' + extra + ' Imported students appear under Active Students.');
+      } else {
+        toast.error('No students were imported. Fill at least admission_number, first_name, and last_name. Class is optional and will use the first available class if left blank.');
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not import this workbook");
     } finally {
