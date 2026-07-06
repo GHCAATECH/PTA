@@ -24,7 +24,7 @@ import { Modal } from "../components/ui/modal";
 import { useSetup } from "../hooks/use-data";
 import { api } from "../lib/api";
 import { money } from "../lib/utils";
-import type { PtaFeeScope } from "../types";
+import type { AcademicYear, PtaFeeScope } from "../types";
 
 type Editor =
   | {
@@ -36,6 +36,7 @@ type Editor =
       kind: "fee";
       id?: string;
       amount: string;
+      academic_year_id: string;
       applies_to: PtaFeeScope;
       class_id?: string;
       student_id?: string;
@@ -45,7 +46,8 @@ type Editor =
 export default function Setup() {
   const setup = useSetup(),
     qc = useQueryClient(),
-    [editor, setEditor] = useState<Editor>(null);
+    [editor, setEditor] = useState<Editor>(null),
+    [feeYearId, setFeeYearId] = useState("");
   const refresh = () => qc.invalidateQueries({ queryKey: ["setup"] });
 
   const mutation = useMutation({
@@ -56,11 +58,10 @@ export default function Setup() {
           ? api.renameClass(e.id, e.value.trim())
           : api.addClassFamily(e.value.trim());
       if (e.kind !== "fee") throw new Error("Unsupported editor state");
-      const active = setup.data?.years.find((y) => y.is_active);
-      if (!active) throw new Error("Activate a semester first");
+      if (!e.academic_year_id) throw new Error("Select an academic semester");
       return api.saveFeeRule({
         id: e.id,
-        academic_year_id: active.id,
+        academic_year_id: e.academic_year_id,
         amount: Number(e.amount),
         applies_to: e.applies_to,
         class_id: e.applies_to === "class" ? e.class_id : null,
@@ -72,6 +73,7 @@ export default function Setup() {
       qc.invalidateQueries({ queryKey: ["students"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["dashboard-details"] });
+      if (values.kind === "fee") setFeeYearId(values.academic_year_id);
       setEditor(null);
       toast.success(
         values.kind === "year"
@@ -136,8 +138,10 @@ export default function Setup() {
 
   const { years, classes, fees, students } = setup.data;
   const active = years.find((y) => y.is_active);
+  const selectedFeeYearId = feeYearId || active?.id || years[0]?.id || "";
+  const selectedFeeYear = years.find((y) => y.id === selectedFeeYearId) ?? null;
   const activeFees = fees
-    .filter((f) => f.academic_year_id === active?.id)
+    .filter((f) => f.academic_year_id === selectedFeeYearId)
     .sort((a, b) => {
       const order = { all_classes: 0, class: 1, student: 2 };
       return order[a.applies_to] - order[b.applies_to];
@@ -208,16 +212,17 @@ export default function Setup() {
             <CardTitle>PTA fee rules</CardTitle>
             <p className="mt-1 text-xs text-slate-500">
               Set PTA fees for all classes, selected classes, or individual
-              students in the active semester.
+              students in a selected academic semester.
             </p>
           </div>
           <Button
             size="sm"
-            disabled={!active}
+            disabled={!selectedFeeYearId}
             onClick={() =>
               setEditor({
                 kind: "fee",
                 amount: "",
+                academic_year_id: selectedFeeYearId,
                 applies_to: "all_classes",
               })
             }
@@ -226,6 +231,27 @@ export default function Setup() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          <label className="block">
+            <span className="label">Academic semester for fee setup</span>
+            <select
+              className="field"
+              value={selectedFeeYearId}
+              onChange={(e) => setFeeYearId(e.target.value)}
+            >
+              {years.map((year) => (
+                <option key={year.id} value={year.id}>
+                  {year.year}{year.is_active ? " (Active)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="rounded-2xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200">
+            {selectedFeeYear
+              ? `Showing PTA fee rules for ${selectedFeeYear.year}`
+              : "Select an academic semester to manage PTA fee rules."}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <RuleSummaryCard
               icon={WalletCards}
@@ -289,6 +315,7 @@ export default function Setup() {
                           kind: "fee",
                           id: fee.id,
                           amount: String(fee.amount),
+                          academic_year_id: fee.academic_year_id,
                           applies_to: fee.applies_to,
                           class_id: fee.class_id ?? undefined,
                           student_id: fee.student_id ?? undefined,
@@ -316,7 +343,7 @@ export default function Setup() {
               ))
             ) : (
               <div className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-500 dark:border-white/10">
-                No PTA fee rules set for the active semester yet.
+                No PTA fee rules set for this academic semester yet.
               </div>
             )}
           </div>
@@ -391,6 +418,7 @@ export default function Setup() {
         <EditorModal
           editor={editor}
           busy={mutation.isPending}
+          years={years}
           classes={classes}
           students={students}
           onClose={() => setEditor(null)}
@@ -426,6 +454,7 @@ function RuleSummaryCard({
 function EditorModal({
   editor,
   busy,
+  years,
   classes,
   students,
   onClose,
@@ -433,12 +462,18 @@ function EditorModal({
 }: {
   editor: NonNullable<Editor>;
   busy: boolean;
+  years: AcademicYear[];
   classes: Array<{ id: string; name: string }>;
   students: Array<any>;
   onClose: () => void;
   onSave: (e: NonNullable<Editor>) => void;
 }) {
-  const [value, setValue] = useState(editor.kind === "fee" ? editor.amount : editor.value);
+  const [value, setValue] = useState(
+    editor.kind === "fee" ? editor.amount : editor.value,
+  );
+  const [yearId, setYearId] = useState(
+    editor.kind === "fee" ? editor.academic_year_id : "",
+  );
   const [appliesTo, setAppliesTo] = useState<PtaFeeScope>(
     editor.kind === "fee" ? editor.applies_to : "all_classes",
   );
@@ -475,6 +510,7 @@ function EditorModal({
               kind: "fee",
               id: editor.id,
               amount: value,
+              academic_year_id: yearId,
               applies_to: appliesTo,
               class_id: appliesTo === "class" ? classId : undefined,
               student_id: appliesTo === "student" ? studentId : undefined,
@@ -487,6 +523,23 @@ function EditorModal({
       >
         {editor.kind === "fee" ? (
           <>
+            <label>
+              <span className="label">Academic semester</span>
+              <select
+                className="field"
+                value={yearId}
+                onChange={(e) => setYearId(e.target.value)}
+                required
+              >
+                <option value="">Select academic semester</option>
+                {years.map((year) => (
+                  <option key={year.id} value={year.id}>
+                    {year.year}{year.is_active ? " (Active)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label>
               <span className="label">Apply fee to</span>
               <select
