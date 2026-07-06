@@ -4,7 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -12,6 +12,33 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+function resolveStudentRedirectUrl(configured: string | null | undefined) {
+  const saved = configured?.trim();
+  if (saved) return saved;
+  return "https://schooldashborad.com/student";
+}
+
+function buildFunctionCallbackUrl(req: Request) {
+  const url = new URL(req.url);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function redirectWithParams(baseUrl: string, params: Record<string, string>) {
+  const url = new URL(baseUrl);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return new Response(null, {
+    status: 302,
+    headers: {
+      ...corsHeaders,
+      Location: url.toString(),
+    },
+  });
+}
 
 function fillTemplate(template: string, values: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
@@ -47,41 +74,6 @@ function normalizeWebhookUrl(value: string | undefined | null) {
       "SMS_WEBHOOK_URL is invalid. Save only the raw webhook URL, for example https://example.com/sms",
     );
   }
-}
-
-function normalizeAbsoluteUrl(value: string | undefined | null) {
-  const input = value?.trim();
-  if (!input) return null;
-  try {
-    return new URL(input).toString();
-  } catch {
-    return null;
-  }
-}
-
-function deriveCallbackUrl(req: Request, configuredUrl?: string | null) {
-  const explicit = normalizeAbsoluteUrl(configuredUrl);
-  if (explicit) return explicit;
-
-  const referer = req.headers.get("referer");
-  if (referer) {
-    try {
-      const url = new URL(referer);
-      return `${url.origin}/student`;
-    } catch {
-      // Ignore invalid referer values and continue to origin fallback.
-    }
-  }
-
-  const origin = req.headers.get("origin");
-  if (origin) {
-    const normalizedOrigin = normalizeAbsoluteUrl(origin);
-    if (normalizedOrigin) {
-      return `${normalizedOrigin.replace(/\/$/, "")}/student`;
-    }
-  }
-
-  return null;
 }
 
 function buildArkeselUrl(rawUrl: string) {
@@ -362,12 +354,202 @@ async function sendConfirmationSms(input: {
   }
 }
 
+async function verifyAndRecordPayment(input: {
+  admin: ReturnType<typeof createClient>;
+  studentId: string;
+  academicYearId: string;
+  reference: string;
+  paystackSecretKey: string;
+  paystackCurrency: string;
+  checkoutEmail: string | null;
+  settings: {
+    sms_enabled: boolean;
+    sms_sender_name: string;
+    sms_alert_template: string;
+    school_name: string;
+    phone: string | null;
+  };
+  smsWebhookUrl: string | null;
+  smsApiKey: string | undefined;
+  smsAuthHeader: string;
+}) {
+  const { data: tx, error: txError } = await input.admin
+    .from("online_payment_transactions")
+    .select("*")
+    .eq("reference", input.reference)
+    .eq("student_id", input.studentId)
+    .maybeSingle();
+  if (txError) throw txError;
+  if (!tx) throw new Error("Payment transaction not found");
+
+  if (tx.payment_id) {
+    const { data: receipt, error: receiptError } = await input.admin
+      .from("payment_receipts")
+      .select("id,receipt_number,amount_paid,student_id")
+      .eq("id", tx.payment_id)
+      .single();
+    if (receiptError || !receipt) {
+      throw receiptError ?? new Error("Recorded receipt not found");
+    }
+    return {
+      success: true,
+      payment_id: receipt.id,
+      receipt_number: receipt.receipt_number,
+      amount_paid: Number(receipt.amount_paid ?? tx.paid_amount ?? 0),
+      student_id: receipt.student_id,
+    };
+  }
+
+  const verified = await verifyPaystack(input.reference, input.paystackSecretKey);
+  if (verified.status !== "success") {
+    throw new Error(`Payment status is ${verified.status}`);
+  }
+
+  const paidAmount = Number(verified.amount ?? 0) / 100;
+  if (paidAmount <= 0) {
+    throw new Error("Verified amount must be greater than zero");
+  }
+
+  const payment = await input.admin.rpc("record_online_payment", {
+    p_reference: input.reference,
+    p_student_id: input.studentId,
+    p_academic_year_id: input.academicYearId,
+    p_amount: paidAmount,
+    p_provider: "paystack",
+    p_currency: String(verified.currency ?? input.paystackCurrency),
+    p_checkout_email: input.checkoutEmail,
+    p_provider_payload: verified,
+    p_remarks: `Paystack online payment (${input.reference})`,
+  });
+  if (payment.error) throw payment.error;
+  const created = payment.data as { id: string };
+
+  await sendConfirmationSms({
+    admin: input.admin,
+    paymentId: created.id,
+    settings: input.settings,
+    smsWebhookUrl: input.smsWebhookUrl,
+    smsApiKey: input.smsApiKey,
+    smsAuthHeader: input.smsAuthHeader,
+  }).catch(() => {
+    // Payment recording should not fail if SMS dispatch fails.
+  });
+
+  const { data: receipt, error: receiptError } = await input.admin
+    .from("payment_receipts")
+    .select("id,receipt_number,amount_paid,student_id")
+    .eq("id", created.id)
+    .single();
+  if (receiptError || !receipt) {
+    throw receiptError ?? new Error("Receipt not found after recording payment");
+  }
+
+  return {
+    success: true,
+    payment_id: receipt.id,
+    receipt_number: receipt.receipt_number,
+    amount_paid: Number(receipt.amount_paid),
+    student_id: receipt.student_id,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const template = Deno.env.get("ONLINE_PAYMENT_URL_TEMPLATE")?.trim();
+    const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY")?.trim();
+    const paystackCurrency = Deno.env.get("PAYSTACK_CURRENCY")?.trim() || "GHS";
+    const callbackUrl = buildFunctionCallbackUrl(req);
+    const studentRedirectUrl = resolveStudentRedirectUrl(
+      Deno.env.get("PAYSTACK_STUDENT_REDIRECT_URL")?.trim() ||
+        Deno.env.get("PAYSTACK_CALLBACK_URL")?.trim(),
+    );
+    const smsWebhookUrl = normalizeWebhookUrl(Deno.env.get("SMS_WEBHOOK_URL"));
+    const smsApiKey = Deno.env.get("SMS_API_KEY");
+    const smsAuthHeader = Deno.env.get("SMS_AUTH_HEADER") ?? "Authorization";
+
+    if (req.method === "GET") {
+      const requestUrl = new URL(req.url);
+      const reference =
+        requestUrl.searchParams.get("reference")?.trim() ||
+        requestUrl.searchParams.get("trxref")?.trim() ||
+        "";
+
+      if (!reference) {
+        return redirectWithParams(studentRedirectUrl, {
+          payment: "error",
+          message: "Missing payment reference",
+        });
+      }
+
+      if (!paystackSecretKey) {
+        return redirectWithParams(studentRedirectUrl, {
+          reference,
+          trxref: reference,
+          payment: "error",
+          message: "PAYSTACK_SECRET_KEY is not configured",
+        });
+      }
+
+      const admin = createClient(url, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      try {
+        const { data: tx, error: txError } = await admin
+          .from("online_payment_transactions")
+          .select("student_id,academic_year_id,checkout_email")
+          .eq("reference", reference)
+          .maybeSingle();
+        if (txError) throw txError;
+        if (!tx) throw new Error("Payment transaction not found");
+
+        const { data: settings, error: settingsError } = await admin
+          .from("school_settings")
+          .select("sms_enabled,sms_sender_name,sms_alert_template,school_name,phone")
+          .eq("id", true)
+          .single();
+        if (settingsError || !settings) {
+          throw settingsError ?? new Error("School settings not found");
+        }
+
+        await verifyAndRecordPayment({
+          admin,
+          studentId: tx.student_id,
+          academicYearId: tx.academic_year_id,
+          reference,
+          paystackSecretKey,
+          paystackCurrency,
+          checkoutEmail: tx.checkout_email,
+          settings,
+          smsWebhookUrl,
+          smsApiKey,
+          smsAuthHeader,
+        });
+
+        return redirectWithParams(studentRedirectUrl, {
+          reference,
+          trxref: reference,
+          payment: "success",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Payment verification failed";
+        return redirectWithParams(studentRedirectUrl, {
+          reference,
+          trxref: reference,
+          payment: "error",
+          message,
+        });
+      }
+    }
+
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
     const authorization = req.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer "))
       return json({ error: "Authentication required" }, 401);
@@ -377,20 +559,6 @@ Deno.serve(async (req: Request) => {
       amount?: number;
       reference?: string;
     };
-
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const template = Deno.env.get("ONLINE_PAYMENT_URL_TEMPLATE")?.trim();
-    const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY")?.trim();
-    const paystackCallbackUrl = deriveCallbackUrl(
-      req,
-      Deno.env.get("PAYSTACK_CALLBACK_URL"),
-    );
-    const paystackCurrency = Deno.env.get("PAYSTACK_CURRENCY")?.trim() || "GHS";
-    const smsWebhookUrl = normalizeWebhookUrl(Deno.env.get("SMS_WEBHOOK_URL"));
-    const smsApiKey = Deno.env.get("SMS_API_KEY");
-    const smsAuthHeader = Deno.env.get("SMS_AUTH_HEADER") ?? "Authorization";
 
     if (!paystackSecretKey && !template)
       return json(
@@ -434,7 +602,6 @@ Deno.serve(async (req: Request) => {
     const [
       { data: student, error: studentError },
       { data: summary, error: summaryError },
-      { data: fee, error: feeError },
       { data: settings, error: settingsError },
     ] = await Promise.all([
       admin
@@ -444,13 +611,8 @@ Deno.serve(async (req: Request) => {
         .single(),
       admin
         .from("student_fee_summary")
-        .select("outstanding_balance,total_paid")
+        .select("outstanding_balance,total_paid,fee_amount")
         .eq("student_id", account.student_id)
-        .eq("academic_year_id", year.id)
-        .single(),
-      admin
-        .from("pta_fees")
-        .select("amount")
         .eq("academic_year_id", year.id)
         .single(),
       admin
@@ -464,7 +626,6 @@ Deno.serve(async (req: Request) => {
       throw studentError ?? new Error("Student record not found");
     if (summaryError || !summary)
       throw summaryError ?? new Error("Student summary not found");
-    if (feeError || !fee) throw feeError ?? new Error("PTA fee not found");
     if (settingsError || !settings)
       throw settingsError ?? new Error("School settings not found");
     if (!settings.online_payment_enabled)
@@ -472,7 +633,7 @@ Deno.serve(async (req: Request) => {
 
     const studentName = `${student.first_name} ${student.last_name}`.trim();
     const balance = Number(summary.outstanding_balance ?? 0);
-    const feeAmount = Number(fee.amount ?? 0);
+    const feeAmount = Number((summary as { fee_amount?: number | string }).fee_amount ?? 0);
 
     if (body.action === "verify") {
       if (!paystackSecretKey)
@@ -483,78 +644,36 @@ Deno.serve(async (req: Request) => {
       const reference = body.reference.trim();
       const { data: tx, error: txError } = await admin
         .from("online_payment_transactions")
-        .select("*")
+        .select("student_id")
         .eq("reference", reference)
         .eq("student_id", student.id)
         .maybeSingle();
       if (txError) throw txError;
       if (!tx)
         return json({ error: "Payment transaction not found" }, 404);
-      if (tx.payment_id) {
-        const { data: receipt } = await admin
-          .from("payment_receipts")
-          .select("id,receipt_number,amount_paid")
-          .eq("id", tx.payment_id)
-          .single();
-        return json({
-          success: true,
-          payment_id: tx.payment_id,
-          receipt_number: receipt?.receipt_number ?? "",
-          amount_paid: Number(receipt?.amount_paid ?? tx.paid_amount ?? 0),
-        });
-      }
 
-      const verified = await verifyPaystack(reference, paystackSecretKey);
-      if (verified.status !== "success")
-        return json({ error: `Payment status is ${verified.status}` }, 400);
+      const checkoutEmail =
+        normalizeEmail(settings.email) ??
+        (!isSyntheticStudentEmail(user.email) ? normalizeEmail(user.email) : null) ??
+        (!isSyntheticStudentEmail(account.login_email)
+          ? normalizeEmail(account.login_email)
+          : null);
 
-      const paidAmount = Number(verified.amount ?? 0) / 100;
-      if (paidAmount <= 0)
-        return json({ error: "Verified amount must be greater than zero" }, 400);
-
-      const payment = await admin.rpc("record_online_payment", {
-        p_reference: reference,
-        p_student_id: student.id,
-        p_academic_year_id: year.id,
-        p_amount: paidAmount,
-        p_provider: "paystack",
-        p_currency: String(verified.currency ?? paystackCurrency),
-        p_checkout_email:
-          normalizeEmail(settings.email) ??
-          (!isSyntheticStudentEmail(user.email) ? normalizeEmail(user.email) : null) ??
-          (!isSyntheticStudentEmail(account.login_email)
-            ? normalizeEmail(account.login_email)
-            : null),
-        p_provider_payload: verified,
-        p_remarks: `Paystack online payment (${reference})`,
-      });
-      if (payment.error) throw payment.error;
-      const created = payment.data as { id: string };
-
-      await sendConfirmationSms({
+      const receipt = await verifyAndRecordPayment({
         admin,
-        paymentId: created.id,
+        studentId: student.id,
+        academicYearId: year.id,
+        reference,
+        paystackSecretKey,
+        paystackCurrency,
+        checkoutEmail,
         settings,
         smsWebhookUrl,
         smsApiKey,
         smsAuthHeader,
-      }).catch(() => {
-        // Payment recording should not fail if SMS dispatch fails.
       });
 
-      const { data: receipt, error: receiptError } = await admin
-        .from("payment_receipts")
-        .select("id,receipt_number,amount_paid")
-        .eq("id", created.id)
-        .single();
-      if (receiptError) throw receiptError;
-
-      return json({
-        success: true,
-        payment_id: receipt.id,
-        receipt_number: receipt.receipt_number,
-        amount_paid: Number(receipt.amount_paid),
-      });
+      return json(receipt);
     }
 
     const numeric = Number(body.amount ?? 0);
@@ -588,7 +707,7 @@ Deno.serve(async (req: Request) => {
         amount: numeric,
         currency: paystackCurrency,
         reference,
-        callbackUrl: paystackCallbackUrl,
+        callbackUrl,
         metadata: {
           source: "pta-student-portal",
           student_id: student.id,
