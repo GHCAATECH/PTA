@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/layout/app-shell";
 import { useAuth } from "./features/auth/auth-context";
 import Login from "./pages/login";
@@ -22,23 +22,39 @@ const Loader = () => (
 );
 function PublicHome() {
   const { profile, studentAccount, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <Loader />;
   if (profile) return <Navigate to="/dashboard" replace />;
-  if (studentAccount) return <Navigate to="/student" replace />;
+  if (studentAccount)
+    return (
+      <Navigate
+        to={{ pathname: "/student", search: location.search }}
+        replace
+      />
+    );
   return <StudentLogin />;
 }
 function Protected() {
   const { profile, studentAccount, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <Loader />;
-  if (studentAccount) return <Navigate to="/student" replace />;
+  if (studentAccount)
+    return (
+      <Navigate
+        to={{ pathname: "/student", search: location.search }}
+        replace
+      />
+    );
   if (!profile) return <Navigate to="/staff-login" replace />;
   return <AppShell />;
 }
 function StudentProtected() {
   const { profile, studentAccount, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <Loader />;
   if (profile) return <Navigate to="/dashboard" replace />;
-  if (!studentAccount) return <Navigate to="/" replace />;
+  if (!studentAccount)
+    return <Navigate to={{ pathname: "/", search: location.search }} replace />;
   return <StudentPortal />;
 }
 function AdminOnly({ children }: { children: ReactNode }) {

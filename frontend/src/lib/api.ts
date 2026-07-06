@@ -84,17 +84,9 @@ export const api = {
             })
         : await activeYear();
     const summaryQuery = supabase.from("student_fee_summary").select("*");
-    const feeQuery = allYears
-      ? supabase.from("pta_fees").select("amount")
-      : supabase
-          .from("pta_fees")
-          .select("amount")
-          .eq("academic_year_id", year!.id)
-          .single();
     const [
       { data: students, error },
       { data: summaries, error: summaryError },
-      { data: fee, error: feeError },
     ] = await Promise.all([
       supabase
         .from("students")
@@ -102,14 +94,10 @@ export const api = {
         .order("status")
         .order("last_name"),
       allYears ? summaryQuery : summaryQuery.eq("academic_year_id", year!.id),
-      feeQuery,
     ]);
     if (error) throw error;
     if (summaryError) throw summaryError;
-    if (feeError) throw feeError;
-    const totalFee = Array.isArray(fee)
-      ? fee.reduce((sum, item: any) => sum + Number(item.amount ?? 0), 0)
-      : Number((fee as any)?.amount ?? 0);
+
     const byStudent = new Map<string, any>();
     for (const summary of summaries ?? []) {
       const current = byStudent.get(summary.student_id);
@@ -130,7 +118,7 @@ export const api = {
       return {
         ...s,
         class_name: s.classes?.name ?? "",
-        fee: allYears ? Number(x?.fee_amount ?? totalFee) : totalFee,
+        fee: Number(x?.fee_amount ?? 0),
         total_paid: Number(x?.total_paid ?? 0),
         balance: Number(x?.outstanding_balance ?? 0),
         payment_status: x?.payment_status ?? "UNPAID",
@@ -275,26 +263,51 @@ export const api = {
         .order("year", { ascending: false }),
       supabase.from("classes").select("*").order("sort_order").order("name"),
       supabase.from("pta_fees").select("*"),
-      supabase.from("students").select("class_id"),
+      supabase
+        .from("students")
+        .select("id,first_name,last_name,admission_number,class_id,status,classes(name)")
+        .order("last_name")
+        .order("first_name"),
     ]);
     if (yError) throw yError;
     if (cError) throw cError;
     if (fError) throw fError;
     if (sError) throw sError;
+
     const counts = new Map<string, number>();
-    (students ?? []).forEach((s) =>
+    (students ?? []).forEach((s: any) =>
       counts.set(s.class_id, (counts.get(s.class_id) ?? 0) + 1),
     );
+
+    const classMap = new Map<string, any>();
+    (classes ?? []).forEach((c: any) => classMap.set(c.id, c));
+    const studentMap = new Map<string, any>();
+    (students ?? []).forEach((s: any) => studentMap.set(s.id, s));
+
     return {
       years: (years ?? []) as AcademicYear[],
-      classes: (classes ?? []).map((c) => ({
+      classes: (classes ?? []).map((c: any) => ({
         ...c,
         student_count: counts.get(c.id) ?? 0,
       })) as Array<SchoolClass & { student_count: number }>,
-      fees: (fees ?? []).map((f) => ({
-        ...f,
-        amount: Number(f.amount),
-      })) as PtaFee[],
+      fees: (fees ?? []).map((f: any) => {
+        const student = f.student_id ? studentMap.get(f.student_id) : null;
+        const schoolClass = f.class_id ? classMap.get(f.class_id) : null;
+        return {
+          ...f,
+          amount: Number(f.amount),
+          applies_to: f.applies_to ?? "all_classes",
+          class_name: schoolClass?.name ?? null,
+          student_name: student
+            ? `${student.first_name} ${student.last_name}`.trim()
+            : null,
+          admission_number: student?.admission_number ?? null,
+        };
+      }) as PtaFee[],
+      students: (students ?? []).map((s: any) => ({
+        ...s,
+        class_name: s.classes?.name ?? "",
+      })),
     };
   },
   async addAcademicSession(session: string) {
@@ -457,14 +470,76 @@ export const api = {
       missingTargets: [...missingTargets],
     };
   },
-  async saveFee(academic_year_id: string, amount: number) {
+  async saveFeeRule(input: {
+    id?: string;
+    academic_year_id: string;
+    amount: number;
+    applies_to: "all_classes" | "class" | "student";
+    class_id?: string | null;
+    student_id?: string | null;
+  }) {
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Enter a valid PTA fee amount");
+    }
+    if (input.applies_to === "class" && !input.class_id) {
+      throw new Error("Select a class");
+    }
+    if (input.applies_to === "student" && !input.student_id) {
+      throw new Error("Select a student");
+    }
+
+    const payload = {
+      academic_year_id: input.academic_year_id,
+      amount,
+      applies_to: input.applies_to,
+      class_id: input.applies_to === "class" ? input.class_id ?? null : null,
+      student_id: input.applies_to === "student" ? input.student_id ?? null : null,
+    };
+
+    if (input.id) {
+      const { data, error } = await supabase
+        .from("pta_fees")
+        .update(payload)
+        .eq("id", input.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    let existingQuery = supabase
+      .from("pta_fees")
+      .select("id")
+      .eq("academic_year_id", input.academic_year_id)
+      .eq("applies_to", input.applies_to);
+    if (input.applies_to === "class") existingQuery = existingQuery.eq("class_id", input.class_id!);
+    if (input.applies_to === "student") existingQuery = existingQuery.eq("student_id", input.student_id!);
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    if (existingError) throw existingError;
+
+    if (existing?.id) {
+      const { data, error } = await supabase
+        .from("pta_fees")
+        .update(payload)
+        .eq("id", existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
     const { data, error } = await supabase
       .from("pta_fees")
-      .upsert({ academic_year_id, amount }, { onConflict: "academic_year_id" })
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;
     return data;
+  },
+  async deleteFeeRule(id: string) {
+    const { error } = await supabase.from("pta_fees").delete().eq("id", id);
+    if (error) throw error;
   },
   async settings(): Promise<SchoolSettings> {
     const { data, error } = await supabase

@@ -152,7 +152,7 @@ export default function StudentPortal() {
       </div>
     );
 
-  const { student, summary, payments, year, settings, fee } = portal.data;
+  const { student, summary, payments, year, settings } = portal.data;
   const studentName = `${student.first_name} ${student.last_name}`;
   const balance = Number(summary.outstanding_balance);
   const hasOutstandingBalance = balance > 0;
@@ -200,7 +200,7 @@ export default function StudentPortal() {
                 Welcome, {student.first_name}.
               </h1>
               <p className="mt-1 text-sm text-indigo-100">
-                {student.admission_number} · {student.classes?.name}
+                {student.admission_number} Ãƒâ€šÃ‚Â· {student.classes?.name}
               </p>
             </div>
           </div>
@@ -216,7 +216,7 @@ export default function StudentPortal() {
           <Summary
             icon={WalletCards}
             label="PTA fee"
-            value={money(Number(fee?.amount ?? 0))}
+            value={money(Number((summary as any).fee_amount ?? 0))}
           />
           <Summary
             icon={CheckCircle2}
@@ -301,7 +301,7 @@ export default function StudentPortal() {
               <Info
                 icon={GraduationCap}
                 label="Class"
-                value={student.classes?.name ?? "—"}
+                value={student.classes?.name ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
               />
               <Info
                 icon={CalendarDays}
@@ -351,7 +351,7 @@ export default function StudentPortal() {
                           {money(Number(payment.amount_paid))}
                         </p>
                         <p className="truncate text-[11px] text-slate-500">
-                          {payment.receipt_number} ·{" "}
+                          {payment.receipt_number} Ãƒâ€šÃ‚Â·{" "}
                           {shortDate(payment.payment_date)}
                         </p>
                       </div>

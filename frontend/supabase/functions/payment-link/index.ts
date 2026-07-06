@@ -13,6 +13,30 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+function resolveCallbackUrl(req: Request, configured: string | null | undefined) {
+  const saved = configured?.trim();
+  if (saved) return saved;
+
+  const origin = req.headers.get("origin")?.trim();
+  if (origin) {
+    try {
+      return new URL("/student", origin).toString();
+    } catch {
+      // Fall through to referer.
+    }
+  }
+
+  const referer = req.headers.get("referer")?.trim();
+  if (!referer) return undefined;
+
+  try {
+    const parsed = new URL(referer);
+    return new URL("/student", parsed.origin).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function fillTemplate(template: string, values: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
     encodeURIComponent(values[key] ?? ""),
@@ -350,6 +374,7 @@ Deno.serve(async (req: Request) => {
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY")?.trim();
     const paystackCallbackUrl = Deno.env.get("PAYSTACK_CALLBACK_URL")?.trim();
     const paystackCurrency = Deno.env.get("PAYSTACK_CURRENCY")?.trim() || "GHS";
+    const callbackUrl = resolveCallbackUrl(req, paystackCallbackUrl);
     const smsWebhookUrl = normalizeWebhookUrl(Deno.env.get("SMS_WEBHOOK_URL"));
     const smsApiKey = Deno.env.get("SMS_API_KEY");
     const smsAuthHeader = Deno.env.get("SMS_AUTH_HEADER") ?? "Authorization";
@@ -396,7 +421,6 @@ Deno.serve(async (req: Request) => {
     const [
       { data: student, error: studentError },
       { data: summary, error: summaryError },
-      { data: fee, error: feeError },
       { data: settings, error: settingsError },
     ] = await Promise.all([
       admin
@@ -406,13 +430,8 @@ Deno.serve(async (req: Request) => {
         .single(),
       admin
         .from("student_fee_summary")
-        .select("outstanding_balance,total_paid")
+        .select("outstanding_balance,total_paid,fee_amount")
         .eq("student_id", account.student_id)
-        .eq("academic_year_id", year.id)
-        .single(),
-      admin
-        .from("pta_fees")
-        .select("amount")
         .eq("academic_year_id", year.id)
         .single(),
       admin
@@ -426,7 +445,6 @@ Deno.serve(async (req: Request) => {
       throw studentError ?? new Error("Student record not found");
     if (summaryError || !summary)
       throw summaryError ?? new Error("Student summary not found");
-    if (feeError || !fee) throw feeError ?? new Error("PTA fee not found");
     if (settingsError || !settings)
       throw settingsError ?? new Error("School settings not found");
     if (!settings.online_payment_enabled)
@@ -434,7 +452,7 @@ Deno.serve(async (req: Request) => {
 
     const studentName = `${student.first_name} ${student.last_name}`.trim();
     const balance = Number(summary.outstanding_balance ?? 0);
-    const feeAmount = Number(fee.amount ?? 0);
+    const feeAmount = Number((summary as { fee_amount?: number | string }).fee_amount ?? 0);
 
     if (body.action === "verify") {
       if (!paystackSecretKey)
@@ -550,7 +568,7 @@ Deno.serve(async (req: Request) => {
         amount: numeric,
         currency: paystackCurrency,
         reference,
-        callbackUrl: paystackCallbackUrl,
+        callbackUrl,
         metadata: {
           source: "pta-student-portal",
           student_id: student.id,

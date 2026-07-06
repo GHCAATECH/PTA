@@ -1,5 +1,6 @@
 export type Role = "administrator" | "accountant";
 export type PaymentStatus = "UNPAID" | "PARTIALLY PAID" | "PAID";
+export type PtaFeeScope = "all_classes" | "class" | "student";
 export interface Profile {
   id: string;
   full_name: string;
@@ -63,6 +64,12 @@ export interface PtaFee {
   id: string;
   academic_year_id: string;
   amount: number;
+  applies_to: PtaFeeScope;
+  class_id: string | null;
+  student_id: string | null;
+  class_name?: string | null;
+  student_name?: string | null;
+  admission_number?: string | null;
 }
 export interface SchoolSettings {
   id: boolean;

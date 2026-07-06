@@ -139,7 +139,7 @@ export default function StudentProfile() {
         </p>
       </Card>
     );
-  const { student: s, summary, payments, fee, account } = portal.data;
+  const { student: s, summary, payments, account } = portal.data;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -208,14 +208,14 @@ export default function StudentProfile() {
               <Info
                 icon={UserRound}
                 label="Class"
-                value={s.classes?.name ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}
+                value={s.classes?.name ?? "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"}
               />
               <Info
                 icon={Phone}
                 label="Parent"
-                value={`${s.parent_name} Ãƒâ€šÃ‚Â· ${s.parent_phone}`}
+                value={`${s.parent_name} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${s.parent_phone}`}
               />
-              <Info icon={MapPin} label="Address" value={s.address ?? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"} />
+              <Info icon={MapPin} label="Address" value={s.address ?? "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"} />
             </div>
           </CardContent>
         </Card>
@@ -223,7 +223,7 @@ export default function StudentProfile() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Summary
               label="PTA fee"
-              value={money(Number(fee?.amount ?? 0))}
+              value={money(Number((summary as any).fee_amount ?? 0))}
             />
             <Summary
               label="Total paid"
@@ -259,7 +259,7 @@ export default function StudentProfile() {
                       <div className="min-w-0 flex-1">
                         <p className="font-bold">{money(p.amount_paid)}</p>
                         <p className="truncate text-[11px] text-slate-500">
-                          {p.receipt_number} Ãƒâ€šÃ‚Â· {p.academic_year} Ãƒâ€šÃ‚Â·{" "}
+                          {p.receipt_number} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {p.academic_year} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·{" "}
                           {shortDate(p.payment_date)}
                         </p>
                       </div>
