@@ -487,10 +487,10 @@ Deno.serve(async (req: Request) => {
     const template = Deno.env.get("ONLINE_PAYMENT_URL_TEMPLATE")?.trim();
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY")?.trim();
     const paystackCurrency = Deno.env.get("PAYSTACK_CURRENCY")?.trim() || "GHS";
-    const callbackUrl = buildFunctionCallbackUrl(req);
+    const configuredCallbackUrl = Deno.env.get("PAYSTACK_CALLBACK_URL")?.trim();
+    const callbackUrl = configuredCallbackUrl || buildFunctionCallbackUrl(req);
     const studentRedirectUrl = resolveStudentRedirectUrl(
-      Deno.env.get("PAYSTACK_STUDENT_REDIRECT_URL")?.trim() ||
-        Deno.env.get("PAYSTACK_CALLBACK_URL")?.trim(),
+      Deno.env.get("PAYSTACK_STUDENT_REDIRECT_URL")?.trim(),
     );
     const smsWebhookUrl = normalizeWebhookUrl(Deno.env.get("SMS_WEBHOOK_URL"));
     const smsApiKey = Deno.env.get("SMS_API_KEY");
