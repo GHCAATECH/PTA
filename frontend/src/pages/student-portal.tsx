@@ -27,6 +27,7 @@ import {
 } from "../components/ui/card";
 import { useAuth } from "../features/auth/auth-context";
 import { api } from "../lib/api";
+import { buildStudentFeeOverview } from "../lib/fee-metrics";
 import { printReceipt } from "../lib/print-receipt";
 import { supabase } from "../lib/supabase";
 import { money, shortDate } from "../lib/utils";
@@ -42,9 +43,8 @@ async function loadPortal(studentId: string) {
 
   const [
     { data: student, error: studentError },
-    { data: summary, error: summaryError },
+    { data: summaries, error: summaryError },
     { data: payments, error: paymentsError },
-    { data: fee, error: feeError },
     { data: settings },
   ] = await Promise.all([
     supabase
@@ -56,28 +56,33 @@ async function loadPortal(studentId: string) {
       .from("student_fee_summary")
       .select("*")
       .eq("student_id", studentId)
-      .eq("academic_year_id", year.id)
-      .single(),
+      .order("year"),
     supabase
       .from("payment_receipts")
       .select("*")
       .eq("student_id", studentId)
       .order("payment_date", { ascending: false }),
-    supabase
-      .from("pta_fees")
-      .select("amount")
-      .eq("academic_year_id", year.id)
-      .single(),
     supabase.from("school_settings").select("*").eq("id", true).maybeSingle(),
   ]);
 
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  if (feeError) throw feeError;
+  const feeOverview = buildStudentFeeOverview(summaries ?? [], year.id);
+  if (!feeOverview.activeSummary) {
+    throw new Error("No fee summary found for the active semester");
+  }
 
-  return { year, student, summary, payments: payments ?? [], settings, fee };
+  return {
+    year,
+    student,
+    summary: feeOverview.activeSummary,
+    feeOverview,
+    payments: payments ?? [],
+    settings,
+  };
 }
+
 
 export default function StudentPortal() {
   const { studentAccount, signOut } = useAuth();
@@ -152,7 +157,7 @@ export default function StudentPortal() {
       </div>
     );
 
-  const { student, summary, payments, year, settings } = portal.data;
+  const { student, summary, feeOverview, payments, year, settings } = portal.data;
   const studentName = `${student.first_name} ${student.last_name}`;
   const balance = Number(summary.outstanding_balance);
   const hasOutstandingBalance = balance > 0;
@@ -215,19 +220,25 @@ export default function StudentPortal() {
         >
           <Summary
             icon={WalletCards}
-            label="PTA fee"
-            value={money(Number((summary as any).fee_amount ?? 0))}
+            label="Expected fees"
+            value={money(feeOverview.activeExpected)}
           />
           <Summary
             icon={CheckCircle2}
-            label="Total paid"
-            value={money(Number(summary.total_paid))}
+            label="Total collected"
+            value={money(feeOverview.activeCollected)}
             tone="emerald"
           />
           <Summary
             icon={ReceiptText}
-            label="Outstanding balance"
-            value={money(balance)}
+            label="Outstanding"
+            value={money(feeOverview.previousOutstanding)}
+            tone="amber"
+          />
+          <Summary
+            icon={ShieldCheck}
+            label="Total debt"
+            value={money(feeOverview.totalDebt)}
             tone="amber"
           />
           {settings?.online_payment_enabled && hasOutstandingBalance ? (

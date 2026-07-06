@@ -56,6 +56,7 @@ export interface DashboardStats {
   total_expected: number;
   total_collected: number;
   outstanding: number;
+  total_debt: number;
   fully_paid: number;
   owing: number;
   today_collected: number;

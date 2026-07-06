@@ -65,6 +65,7 @@ const emptyStats: DashboardStats = {
   total_expected: 0,
   total_collected: 0,
   outstanding: 0,
+  total_debt: 0,
   fully_paid: 0,
   owing: 0,
   today_collected: 0,
@@ -153,9 +154,16 @@ export default function Dashboard() {
     {
       label: "Outstanding",
       value: money(stats.outstanding),
-      detail: `${Math.max(0, 100 - rate)}% remaining`,
+      detail: "Unpaid balance from previous semesters",
       icon: WalletCards,
       tone: "amber",
+    },
+    {
+      label: "Total debt",
+      value: money(stats.total_debt),
+      detail: "Active expected fees plus previous outstanding",
+      icon: ReceiptText,
+      tone: "rose",
     },
     {
       label: "Fully paid",
@@ -200,7 +208,7 @@ export default function Dashboard() {
           </Link>
         </div>
       </section>
-      <section className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <section className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         {metrics.map(({ label, value, detail, icon: Icon, tone }) => (
           <Card key={label} className="p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">

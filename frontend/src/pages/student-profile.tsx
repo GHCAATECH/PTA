@@ -220,7 +220,7 @@ export default function StudentProfile() {
           </CardContent>
         </Card>
         <div className="space-y-6">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Summary
               label="PTA fee"
               value={money(Number((summary as any).fee_amount ?? 0))}

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { buildDashboardMetrics } from "./fee-metrics";
 import type {
   AcademicYear,
   DashboardStats,
@@ -201,17 +202,25 @@ export const api = {
             return data;
           })
       : await activeYear();
-    const { data, error } = await supabase.rpc("dashboard_stats", {
-      p_academic_year_id: year.id,
-    });
-    if (error) throw error;
-    return data as DashboardStats;
+    const [
+      { data: summaries, error: summaryError },
+      { data: payments, error: paymentError },
+    ] = await Promise.all([
+      supabase.from("student_fee_summary").select("*"),
+      supabase
+        .from("payment_receipts")
+        .select("academic_year_id,amount_paid,payment_date")
+        .eq("academic_year_id", year.id),
+    ]);
+    if (summaryError) throw summaryError;
+    if (paymentError) throw paymentError;
+    return buildDashboardMetrics(summaries ?? [], payments ?? [], year.id).stats;
   },
   async dashboardDetails() {
     const year = await activeYear();
     const [
       { data: payments, error: paymentError },
-      { data: students, error: studentError },
+      { data: summaries, error: summaryError },
     ] = await Promise.all([
       supabase
         .from("payment_receipts")
@@ -222,12 +231,18 @@ export const api = {
         .order("payment_date"),
       supabase
         .from("student_fee_summary")
-        .select("student_id,class_name,payment_status")
-        .eq("academic_year_id", year.id),
+        .select(
+          "student_id,academic_year_id,year,class_name,fee_amount,total_paid,outstanding_balance,payment_status",
+        ),
     ]);
     if (paymentError) throw paymentError;
-    if (studentError) throw studentError;
-    return { year, payments: payments ?? [], students: students ?? [] };
+    if (summaryError) throw summaryError;
+    const { studentStates } = buildDashboardMetrics(
+      summaries ?? [],
+      payments ?? [],
+      year.id,
+    );
+    return { year, payments: payments ?? [], students: studentStates };
   },
   async createPayment(input: {
     student_id: string;
