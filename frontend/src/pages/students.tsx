@@ -275,7 +275,7 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
       fgColor: { argb: "FF4F46E5" },
     };
     sheet.getColumn("K").width = 58;
-    sheet.getCell("K2").value = "Password is optional, but if provided it must be at least 8 characters. Gender should be Male, Female, or Other. Class must exactly match an existing class name in the system.";
+    sheet.getCell("K2").value = "Only admission_number, first_name, and last_name are required. Password is optional, but if provided it must be at least 8 characters. Gender should be Male, Female, or Other. Class is optional; if left blank, the first available class in the system will be used.";
     const data = await wb.xlsx.writeBuffer();
     const url = URL.createObjectURL(
       new Blob([data as BlobPart], {
