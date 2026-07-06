@@ -236,6 +236,60 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
     toast.success("Student list exported");
   };
 
+  const downloadImportTemplate = async () => {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet("Student Import Template");
+    sheet.columns = [
+      { header: "admission_number", key: "admission_number", width: 22 },
+      { header: "first_name", key: "first_name", width: 18 },
+      { header: "last_name", key: "last_name", width: 18 },
+      { header: "gender", key: "gender", width: 12 },
+      { header: "class", key: "class", width: 20 },
+      { header: "parent_name", key: "parent_name", width: 24 },
+      { header: "parent_phone", key: "parent_phone", width: 18 },
+      { header: "address", key: "address", width: 28 },
+      { header: "password", key: "password", width: 20 },
+    ];
+    sheet.addRow({
+      admission_number: "APS/26/001",
+      first_name: "Ama",
+      last_name: "Mensah",
+      gender: "Female",
+      class: classes[0]?.name ?? "1 Science",
+      parent_name: "Kwame Mensah",
+      parent_phone: "0240000000",
+      address: "Accra",
+      password: "student123",
+    });
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF4F46E5" },
+    };
+    sheet.getCell("K1").value = "Notes";
+    sheet.getCell("K1").font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getCell("K1").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF4F46E5" },
+    };
+    sheet.getColumn("K").width = 58;
+    sheet.getCell("K2").value = "Password is optional, but if provided it must be at least 8 characters. Gender should be Male, Female, or Other. Class must exactly match an existing class name in the system.";
+    const data = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(
+      new Blob([data as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pta-student-import-template.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Student import template downloaded");
+  };
+
   const importFile = async (file?: File) => {
     if (!file) return;
     setImporting(true);
@@ -318,6 +372,9 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
                 className="hidden"
                 onChange={(e) => importFile(e.target.files?.[0])}
               />
+              <Button variant="outline" onClick={downloadImportTemplate}>
+                <Download size={16} /> Template
+              </Button>
               <Button variant="outline" disabled={importing} onClick={() => inputRef.current?.click()}>
                 {importing ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />} Import
               </Button>
