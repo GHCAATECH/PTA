@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -143,12 +143,11 @@ export default function Setup() {
       return order[a.applies_to] - order[b.applies_to];
     });
 
-  const summaryCards = useMemo(() => {
-    const allClasses = activeFees.find((f) => f.applies_to === "all_classes");
-    const classRules = activeFees.filter((f) => f.applies_to === "class").length;
-    const studentRules = activeFees.filter((f) => f.applies_to === "student").length;
-    return { allClasses, classRules, studentRules };
-  }, [activeFees]);
+  const summaryCards = {
+    allClasses: activeFees.find((f) => f.applies_to === "all_classes"),
+    classRules: activeFees.filter((f) => f.applies_to === "class").length,
+    studentRules: activeFees.filter((f) => f.applies_to === "student").length,
+  };
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">
@@ -450,10 +449,10 @@ function EditorModal({
     editor.kind === "fee" ? editor.student_id ?? "" : "",
   );
 
-  const filteredStudents = useMemo(() => {
-    if (appliesTo !== "student") return students;
-    return students.filter((student) => !classId || student.class_id === classId);
-  }, [appliesTo, classId, students]);
+  const filteredStudents =
+    appliesTo !== "student"
+      ? students
+      : students.filter((student) => !classId || student.class_id === classId);
 
   const title =
     editor.kind === "year"
