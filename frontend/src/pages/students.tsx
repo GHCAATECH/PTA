@@ -298,13 +298,22 @@ export function StudentsPage({ archivedView = false }: StudentsPageProps) {
       await wb.xlsx.load(await file.arrayBuffer());
       const ws = wb.worksheets[0];
       if (!ws) throw new Error("Workbook has no worksheet");
-      const headers = (ws.getRow(1).values as unknown[]).map((v) =>
-        String(v ?? "").trim().toLowerCase().replaceAll(" ", "_"),
+      const headers = Array.from({ length: ws.columnCount }, (_, index) =>
+        String(ws.getRow(1).getCell(index + 1).value ?? "")
+          .trim()
+          .toLowerCase()
+          .replaceAll(" ", "_"),
       );
       let count = 0;
       for (let i = 2; i <= ws.rowCount; i++) {
-        const values = ws.getRow(i).values as unknown[];
-        const row = Object.fromEntries(headers.map((h, j) => [h, values[j]]));
+        const rowValues = Array.from({ length: headers.length }, (_, index) =>
+          ws.getRow(i).getCell(index + 1).value,
+        );
+        const row = Object.fromEntries(
+          headers
+            .map((header, index) => [header, rowValues[index]] as const)
+            .filter(([header]) => header),
+        );
         const className = String(row.class ?? row.class_name ?? "").trim();
         const schoolClass = classes.find(
           (c) => c.name.toLowerCase() === className.toLowerCase(),
