@@ -624,7 +624,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Authentication required" }, 401);
 
     const body = (await req.json().catch(() => ({}))) as {
-      action?: "initialize" | "verify";
+      action?: "initialize" | "verify" | "portal";
       amount?: number;
       reference?: string;
     };
@@ -715,6 +715,22 @@ Deno.serve(async (req: Request) => {
     }
     const balance = Number(feeOverview.totalDebt ?? 0);
     const feeAmount = Number(feeOverview.activeExpected ?? 0);
+    if (body.action === "portal") {
+      const { data: payments, error: paymentsError } = await admin
+        .from("payment_receipts")
+        .select("*")
+        .eq("student_id", student.id)
+        .order("payment_date", { ascending: false });
+      if (paymentsError) throw paymentsError;
+
+      return json({
+        year,
+        student,
+        summaries,
+        payments: payments ?? [],
+        settings,
+      });
+    }
 
     if (body.action === "verify") {
       if (!paystackSecretKey)
@@ -850,5 +866,6 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 400);
   }
 });
+
 
 

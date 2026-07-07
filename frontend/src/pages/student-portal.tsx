@@ -34,6 +34,33 @@ import { money, shortDate } from "../lib/utils";
 import type { Payment } from "../types";
 
 async function loadPortal(studentId: string) {
+  const portalResponse = await supabase.functions.invoke("payment-link", {
+    body: { action: "portal" },
+  });
+
+  if (!portalResponse.error && portalResponse.data) {
+    const data = portalResponse.data as {
+      year: any;
+      student: any;
+      summaries: any[];
+      payments: any[];
+      settings: any;
+    };
+    const feeOverview = buildStudentFeeOverview(data.summaries ?? [], data.year.id);
+    if (!feeOverview.activeSummary) {
+      throw new Error("No fee summary found for the active semester");
+    }
+
+    return {
+      year: data.year,
+      student: data.student,
+      summary: feeOverview.activeSummary,
+      feeOverview,
+      payments: data.payments ?? [],
+      settings: data.settings,
+    };
+  }
+
   const { data: year, error: yearError } = await supabase
     .from("academic_years")
     .select("*")
@@ -461,5 +488,6 @@ function Info({
     </div>
   );
 }
+
 
 
