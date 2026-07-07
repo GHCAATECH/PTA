@@ -159,7 +159,7 @@ export default function StudentPortal() {
 
   const { student, summary, feeOverview, payments, year, settings } = portal.data;
   const studentName = `${student.first_name} ${student.last_name}`;
-  const balance = Number(summary.outstanding_balance);
+  const balance = Number(feeOverview.totalDebt);
   const hasOutstandingBalance = balance > 0;
   const numericPayAmount = Number(payAmount) || 0;
   const payInvalid =
@@ -231,8 +231,8 @@ export default function StudentPortal() {
           />
           <Summary
             icon={ReceiptText}
-            label="Outstanding balance"
-            value={money(feeOverview.activeOutstanding)}
+            label="Outstanding"
+            value={money(feeOverview.previousOutstanding)}
             tone="amber"
           />
           <Summary
@@ -255,7 +255,7 @@ export default function StudentPortal() {
                     Pay from your dashboard
                   </p>
                   <p className="mt-1 text-sm text-indigo-100">
-                    Enter any amount up to your outstanding balance, pay online,
+                    Enter any amount up to your total debt, pay online,
                     and return here automatically after success.
                   </p>
                 </div>
@@ -461,3 +461,5 @@ function Info({
     </div>
   );
 }
+
+

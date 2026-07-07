@@ -29,6 +29,7 @@ import { useClasses } from "../hooks/use-data";
 import { adminUsers } from "../lib/admin-users";
 import { supabase } from "../lib/supabase";
 import { printReceipt } from "../lib/print-receipt";
+import { buildStudentFeeOverview } from "../lib/fee-metrics";
 import { money, shortDate } from "../lib/utils";
 import type { Payment, Student } from "../types";
 
@@ -41,9 +42,8 @@ async function loadStudent(id: string) {
   if (yearError) throw yearError;
   const [
     { data: student, error: studentError },
-    { data: summary, error: summaryError },
+    { data: summaries, error: summaryError },
     { data: payments, error: paymentsError },
-    { data: fee, error: feeError },
     { data: account },
   ] = await Promise.all([
     supabase.from("students").select("*, classes(name)").eq("id", id).single(),
@@ -51,18 +51,12 @@ async function loadStudent(id: string) {
       .from("student_fee_summary")
       .select("*")
       .eq("student_id", id)
-      .eq("academic_year_id", year.id)
-      .single(),
+      .order("year"),
     supabase
       .from("payment_receipts")
       .select("*")
       .eq("student_id", id)
       .order("payment_date", { ascending: false }),
-    supabase
-      .from("pta_fees")
-      .select("amount")
-      .eq("academic_year_id", year.id)
-      .single(),
     supabase
       .from("student_accounts")
       .select("user_id,created_at")
@@ -72,13 +66,16 @@ async function loadStudent(id: string) {
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  if (feeError) throw feeError;
+  const feeOverview = buildStudentFeeOverview((summaries ?? []) as any[], year.id);
+  if (!feeOverview.activeSummary) {
+    throw new Error("No fee summary found for the active semester");
+  }
   return {
     year,
     student,
-    summary,
+    summary: feeOverview.activeSummary,
+    feeOverview,
     payments: (payments ?? []) as Payment[],
-    fee,
     account,
   };
 }
@@ -139,7 +136,7 @@ export default function StudentProfile() {
         </p>
       </Card>
     );
-  const { student: s, summary, payments, account } = portal.data;
+  const { student: s, summary, feeOverview, payments, account } = portal.data;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -222,17 +219,22 @@ export default function StudentProfile() {
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Summary
-              label="PTA fee"
-              value={money(Number((summary as any).fee_amount ?? 0))}
+              label="Expected fees"
+              value={money(feeOverview.activeExpected)}
             />
             <Summary
               label="Total paid"
-              value={money(Number(summary.total_paid))}
+              value={money(feeOverview.activeCollected)}
               green
             />
             <Summary
-              label="Balance"
-              value={money(Number(summary.outstanding_balance))}
+              label="Outstanding"
+              value={money(feeOverview.previousOutstanding)}
+              amber
+            />
+            <Summary
+              label="Total debt"
+              value={money(feeOverview.totalDebt)}
               amber
             />
           </div>
@@ -525,3 +527,10 @@ const Summary = ({
     </p>
   </Card>
 );
+
+
+
+
+
+
+

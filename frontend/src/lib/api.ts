@@ -1,5 +1,9 @@
 import { supabase } from "./supabase";
-import { buildDashboardMetrics } from "./fee-metrics";
+import {
+  academicYearSortValue,
+  buildDashboardMetrics,
+  buildStudentFeeOverview,
+} from "./fee-metrics";
 import type {
   AcademicYear,
   DashboardStats,
@@ -72,7 +76,7 @@ export const api = {
   async students(academicYearId?: string): Promise<Student[]> {
     const allYears = academicYearId === "all";
     const year = allYears
-      ? null
+      ? await activeYear()
       : academicYearId
         ? await supabase
             .from("academic_years")
@@ -84,7 +88,6 @@ export const api = {
               return data;
             })
         : await activeYear();
-    const summaryQuery = supabase.from("student_fee_summary").select("*");
     const [
       { data: students, error },
       { data: summaries, error: summaryError },
@@ -94,35 +97,37 @@ export const api = {
         .select("*, classes(name)")
         .order("status")
         .order("last_name"),
-      allYears ? summaryQuery : summaryQuery.eq("academic_year_id", year!.id),
+      supabase.from("student_fee_summary").select("*"),
     ]);
     if (error) throw error;
     if (summaryError) throw summaryError;
 
-    const byStudent = new Map<string, any>();
+    const grouped = new Map<string, any[]>();
     for (const summary of summaries ?? []) {
-      const current = byStudent.get(summary.student_id);
-      if (!allYears) {
-        byStudent.set(summary.student_id, summary);
-        continue;
-      }
-      const nextYear = Number(String(summary.year ?? "0/0").split("/")[0] || 0);
-      const currentYear = Number(
-        String(current?.year ?? "0/0").split("/")[0] || 0,
-      );
-      if (!current || nextYear >= currentYear) {
-        byStudent.set(summary.student_id, summary);
-      }
+      grouped.set(summary.student_id, [
+        ...(grouped.get(summary.student_id) ?? []),
+        summary,
+      ]);
     }
+
     return (students ?? []).map((s: any) => {
-      const x: any = byStudent.get(s.id);
+      const rows = grouped.get(s.id) ?? [];
+      const targetAcademicYearId = allYears
+        ? rows
+            .slice()
+            .sort(
+              (a, b) => academicYearSortValue(b.year) - academicYearSortValue(a.year),
+            )[0]?.academic_year_id ?? year.id
+        : year.id;
+      const overview = buildStudentFeeOverview(rows, targetAcademicYearId);
+      const x: any = overview.activeSummary;
       return {
         ...s,
         class_name: s.classes?.name ?? "",
-        fee: Number(x?.fee_amount ?? 0),
-        total_paid: Number(x?.total_paid ?? 0),
-        balance: Number(x?.outstanding_balance ?? 0),
-        payment_status: x?.payment_status ?? "UNPAID",
+        fee: overview.activeExpected,
+        total_paid: overview.activeCollected,
+        balance: overview.totalDebt,
+        payment_status: overview.overallStatus ?? x?.payment_status ?? "UNPAID",
       };
     });
   },
@@ -709,3 +714,5 @@ export const api = {
     return data.publicUrl;
   },
 };
+
+
