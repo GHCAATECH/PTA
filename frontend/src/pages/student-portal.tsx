@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -27,7 +27,11 @@ import {
 } from "../components/ui/card";
 import { useAuth } from "../features/auth/auth-context";
 import { api } from "../lib/api";
-import { academicYearSortValue, buildStudentFeeOverview } from "../lib/fee-metrics";
+import {
+  academicYearSortValue,
+  buildStudentFeeOverview,
+  resolveStudentFeeAcademicYearId,
+} from "../lib/fee-metrics";
 import { printReceipt } from "../lib/print-receipt";
 import { supabase } from "../lib/supabase";
 import { money, shortDate } from "../lib/utils";
@@ -93,9 +97,16 @@ async function loadPortal(studentId: string) {
       payments: any[];
       settings: any;
     };
-    const feeOverview = buildStudentFeeOverview(data.summaries ?? [], data.year.id);
+    const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+      data.summaries ?? [],
+      data.year.id,
+    );
+    const feeOverview = buildStudentFeeOverview(
+      data.summaries ?? [],
+      targetAcademicYearId,
+    );
     if (!feeOverview.activeSummary) {
-      throw new Error("No fee summary found for the active semester");
+      throw new Error("No fee summary found for the latest configured PTA semester");
     }
 
     return {
@@ -142,9 +153,16 @@ async function loadPortal(studentId: string) {
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  const feeOverview = buildStudentFeeOverview(summaries ?? [], year.id);
+  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    summaries ?? [],
+    year.id,
+  );
+  const feeOverview = buildStudentFeeOverview(
+    summaries ?? [],
+    targetAcademicYearId,
+  );
   if (!feeOverview.activeSummary) {
-    throw new Error("No fee summary found for the active semester");
+    throw new Error("No fee summary found for the latest configured PTA semester");
   }
 
   return {
@@ -540,3 +558,5 @@ function Info({
     </div>
   );
 }
+
+

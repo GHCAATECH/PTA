@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -29,7 +29,10 @@ import { useClasses } from "../hooks/use-data";
 import { adminUsers } from "../lib/admin-users";
 import { supabase } from "../lib/supabase";
 import { printReceipt } from "../lib/print-receipt";
-import { buildStudentFeeOverview } from "../lib/fee-metrics";
+import {
+  buildStudentFeeOverview,
+  resolveStudentFeeAcademicYearId,
+} from "../lib/fee-metrics";
 import { money, shortDate } from "../lib/utils";
 import type { Payment, Student } from "../types";
 
@@ -66,9 +69,16 @@ async function loadStudent(id: string) {
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  const feeOverview = buildStudentFeeOverview((summaries ?? []) as any[], year.id);
+  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    (summaries ?? []) as any[],
+    year.id,
+  );
+  const feeOverview = buildStudentFeeOverview(
+    (summaries ?? []) as any[],
+    targetAcademicYearId,
+  );
   if (!feeOverview.activeSummary) {
-    throw new Error("No fee summary found for the active semester");
+    throw new Error("No fee summary found for the latest configured PTA semester");
   }
   return {
     year,
@@ -532,6 +542,7 @@ const Summary = ({
     </p>
   </Card>
 );
+
 
 
 

@@ -1,4 +1,4 @@
-import type { DashboardStats, PaymentStatus } from "../types";
+﻿import type { DashboardStats, PaymentStatus } from "../types";
 
 type FeeSummaryLike = {
   student_id: string;
@@ -29,6 +29,28 @@ export function academicYearSortValue(value: string | null | undefined) {
   const startYear = Number(match[1] ?? 0);
   const semester = Number(match[3] ?? 0);
   return startYear * 10 + semester;
+}
+
+export function resolveStudentFeeAcademicYearId(
+  rows: FeeSummaryLike[],
+  activeAcademicYearId: string,
+) {
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
+
+  if (numeric(activeSummary?.fee_amount) > 0) {
+    return activeAcademicYearId;
+  }
+
+  const latestConfigured = [...rows]
+    .filter((row) => numeric(row.fee_amount) > 0)
+    .sort(
+      (a, b) =>
+        academicYearSortValue(String(b.year ?? "")) -
+        academicYearSortValue(String(a.year ?? "")),
+    )[0];
+
+  return latestConfigured?.academic_year_id ?? activeAcademicYearId;
 }
 
 export function buildStudentFeeOverview(
@@ -154,3 +176,4 @@ export function buildDashboardMetrics(
     studentStates,
   };
 }
+
