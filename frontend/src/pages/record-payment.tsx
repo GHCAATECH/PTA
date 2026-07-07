@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../features/auth/auth-context";
 import {
   useActiveYear,
+  useClasses,
   useCreatePayment,
   useStudents,
 } from "../hooks/use-data";
@@ -30,29 +31,50 @@ import type { Payment, Student } from "../types";
 
 export default function RecordPayment() {
   const [params] = useSearchParams();
-  const { profile } = useAuth(),
-    students = useStudents(),
-    year = useActiveYear(),
-    create = useCreatePayment();
-  const [student, setStudent] = useState<Student | null>(null),
-    [amount, setAmount] = useState(""),
-    [date, setDate] = useState(new Date().toISOString().slice(0, 10)),
-    [method, setMethod] = useState("cash"),
-    [remarks, setRemarks] = useState(""),
-    [override, setOverride] = useState(false),
-    [saved, setSaved] = useState<Payment | null>(null),
-    [printing, setPrinting] = useState(false);
+  const { profile } = useAuth();
+  const students = useStudents();
+  const classes = useClasses();
+  const year = useActiveYear();
+  const create = useCreatePayment();
+
+  const [student, setStudent] = useState<Student | null>(null);
+  const [classFilter, setClassFilter] = useState("all");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [method, setMethod] = useState("cash");
+  const [remarks, setRemarks] = useState("");
+  const [override, setOverride] = useState(false);
+  const [saved, setSaved] = useState<Payment | null>(null);
+  const [printing, setPrinting] = useState(false);
+
   useEffect(() => {
     const id = params.get("student");
-    if (id && students.data && !student)
-      setStudent(students.data.find((s) => s.id === id) ?? null);
+    if (id && students.data && !student) {
+      const matched = students.data.find((s) => s.id === id) ?? null;
+      setStudent(matched);
+      if (matched?.class_id) setClassFilter(matched.class_id);
+    }
   }, [params, students.data, student]);
-  const numeric = Number(amount) || 0,
-    over = Boolean(student && numeric > student.balance),
-    invalid =
-      !student ||
-      numeric <= 0 ||
-      (over && (!override || profile?.role !== "administrator"));
+
+  const filteredStudents = useMemo(() => {
+    const list = students.data ?? [];
+    if (classFilter === "all") return list;
+    return list.filter((s) => s.class_id === classFilter);
+  }, [students.data, classFilter]);
+
+  useEffect(() => {
+    if (student && classFilter !== "all" && student.class_id !== classFilter) {
+      setStudent(null);
+    }
+  }, [classFilter, student]);
+
+  const numeric = Number(amount) || 0;
+  const over = Boolean(student && numeric > student.balance);
+  const invalid =
+    !student ||
+    numeric <= 0 ||
+    (over && (!override || profile?.role !== "administrator"));
+
   const submit = async () => {
     if (!student || !year.data) return;
     try {
@@ -103,12 +125,14 @@ export default function RecordPayment() {
       );
     }
   };
-  if (students.isLoading || year.isLoading)
+
+  if (students.isLoading || classes.isLoading || year.isLoading)
     return (
       <div className="grid min-h-80 place-items-center">
         <Loader2 className="animate-spin text-indigo-600" />
       </div>
     );
+
   if (saved)
     return (
       <Card className="mx-auto max-w-xl overflow-hidden">
@@ -123,10 +147,7 @@ export default function RecordPayment() {
           <div className="rounded-xl bg-slate-50 p-4 dark:bg-white/5">
             <Line label="Student" value={saved.student_name} />
             <Line label="Amount received" value={money(saved.amount_paid)} />
-            <Line
-              label="New balance"
-              value={money(saved.outstanding_balance)}
-            />
+            <Line label="New balance" value={money(saved.outstanding_balance)} />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -153,7 +174,7 @@ export default function RecordPayment() {
               ) : (
                 <Printer size={17} />
               )}{" "}
-              {printing ? "Preparing receipt…" : "Print receipt"}
+              {printing ? "Preparing receipt..." : "Print receipt"}
             </Button>
             <Button
               className="flex-1"
@@ -172,6 +193,7 @@ export default function RecordPayment() {
         </CardContent>
       </Card>
     );
+
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <Link
@@ -186,51 +208,65 @@ export default function RecordPayment() {
             <div>
               <CardTitle>Payment details</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                Record money already received for {year.data?.year}. Balances include unpaid fees carried forward from earlier academic years.
+                Record money already received for {year.data?.year}. Student balances use all PTA fees set for the student minus total amount collected.
               </p>
             </div>
             <WalletCards className="text-indigo-600" />
           </CardHeader>
           <CardContent className="space-y-5">
-            <label>
-              <span className="label">Select student</span>
-              <select
-                className="field"
-                value={student?.id ?? ""}
-                onChange={(e) =>
-                  setStudent(
-                    (students.data ?? []).find(
-                      (s) => s.id === e.target.value,
-                    ) ?? null,
-                  )
-                }
-              >
-                <option value="">Choose a student…</option>
-                {(students.data ?? []).map((s) => (
-                  <option value={s.id} key={s.id}>
-                    {s.first_name} {s.last_name} · {s.admission_number} ·{" "}
-                    {s.class_name}
-                  </option>
-                ))}
-              </select>
-              {!students.data?.length && (
-                <p className="mt-2 text-xs text-amber-600">
-                  No student records are available. Add a student first.
-                </p>
-              )}
-            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className="label">Filter by class</span>
+                <select
+                  className="field"
+                  value={classFilter}
+                  onChange={(e) => setClassFilter(e.target.value)}
+                >
+                  <option value="all">All classes</option>
+                  {(classes.data ?? []).map((schoolClass) => (
+                    <option value={schoolClass.id} key={schoolClass.id}>
+                      {schoolClass.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label">Select student</span>
+                <select
+                  className="field"
+                  value={student?.id ?? ""}
+                  onChange={(e) =>
+                    setStudent(
+                      (students.data ?? []).find((s) => s.id === e.target.value) ?? null,
+                    )
+                  }
+                >
+                  <option value="">Choose a student...</option>
+                  {filteredStudents.map((s) => (
+                    <option value={s.id} key={s.id}>
+                      {s.first_name} {s.last_name} · {s.admission_number} · {s.class_name}
+                    </option>
+                  ))}
+                </select>
+                {!students.data?.length && (
+                  <p className="mt-2 text-xs text-amber-600">
+                    No student records are available. Add a student first.
+                  </p>
+                )}
+                {students.data?.length && !filteredStudents.length ? (
+                  <p className="mt-2 text-xs text-amber-600">
+                    No students found in the selected class.
+                  </p>
+                ) : null}
+              </label>
+            </div>
+
             {student && (
               <>
                 <div className="grid gap-3 rounded-2xl bg-indigo-50/60 p-4 sm:grid-cols-3 dark:bg-indigo-500/5">
-                  <Info
-                    label="Cumulative PTA fees"
-                    value={money(student.fee)}
-                  />
+                  <Info label="Cumulative PTA fees" value={money(student.fee)} />
                   <Info label="Total paid" value={money(student.total_paid)} />
-                  <Info
-                    label="Outstanding balance"
-                    value={money(student.balance)}
-                  />
+                  <Info label="Outstanding balance" value={money(student.balance)} />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label>
@@ -269,11 +305,7 @@ export default function RecordPayment() {
                   </label>
                   <label>
                     <span className="label">Academic year</span>
-                    <input
-                      className="field"
-                      value={year.data?.year ?? ""}
-                      disabled
-                    />
+                    <input className="field" value={year.data?.year ?? ""} disabled />
                   </label>
                   <label className="sm:col-span-2">
                     <span className="label">Remarks</span>
@@ -295,7 +327,7 @@ export default function RecordPayment() {
                             type="checkbox"
                             checked={override}
                             onChange={(e) => setOverride(e.target.checked)}
-                          />{" "}
+                          />{' '}
                           Approve administrator override
                         </label>
                       ) : (
@@ -306,16 +338,12 @@ export default function RecordPayment() {
                     </div>
                   </div>
                 )}
-                <Button
-                  className="w-full"
-                  disabled={invalid || create.isPending}
-                  onClick={submit}
-                >
+                <Button className="w-full" disabled={invalid || create.isPending} onClick={submit}>
                   {create.isPending ? (
                     <Loader2 className="animate-spin" size={18} />
                   ) : (
                     <ShieldCheck size={18} />
-                  )}{" "}
+                  )}{' '}
                   Save payment securely
                 </Button>
               </>
@@ -337,14 +365,8 @@ export default function RecordPayment() {
                 </p>
                 <div className="border-t pt-4 dark:border-white/8">
                   <Line label="Amount received" value={money(numeric)} />
-                  <Line
-                    label="Total after payment"
-                    value={money(student.total_paid + numeric)}
-                  />
-                  <Line
-                    label="New balance"
-                    value={money(Math.max(0, student.balance - numeric))}
-                  />
+                  <Line label="Total after payment" value={money(student.total_paid + numeric)} />
+                  <Line label="New balance" value={money(Math.max(0, student.balance - numeric))} />
                 </div>
               </div>
             ) : (

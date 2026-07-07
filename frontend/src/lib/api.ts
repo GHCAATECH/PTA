@@ -1,8 +1,9 @@
-import { supabase } from "./supabase";
+﻿import { supabase } from "./supabase";
 import {
   academicYearSortValue,
   buildDashboardMetrics,
   buildStudentFeeOverview,
+  buildStudentPortalFeeOverview,
 } from "./fee-metrics";
 import type {
   AcademicYear,
@@ -112,21 +113,14 @@ export const api = {
 
     return (students ?? []).map((s: any) => {
       const rows = grouped.get(s.id) ?? [];
-      const targetAcademicYearId = allYears
-        ? rows
-            .slice()
-            .sort(
-              (a, b) => academicYearSortValue(b.year) - academicYearSortValue(a.year),
-            )[0]?.academic_year_id ?? year.id
-        : year.id;
-      const overview = buildStudentFeeOverview(rows, targetAcademicYearId);
+      const overview = buildStudentPortalFeeOverview(rows, year.id);
       const x: any = overview.activeSummary;
       return {
         ...s,
         class_name: s.classes?.name ?? "",
-        fee: overview.activeExpected,
-        total_paid: overview.activeCollected,
-        balance: overview.totalDebt,
+        fee: Number(overview.totalConfiguredFees ?? overview.totalPayable ?? 0),
+        total_paid: Number(overview.totalCollected ?? overview.activeCollected ?? 0),
+        balance: Number(overview.totalDebt ?? 0),
         payment_status: overview.overallStatus ?? x?.payment_status ?? "UNPAID",
       };
     });
@@ -714,5 +708,7 @@ export const api = {
     return data.publicUrl;
   },
 };
+
+
 
 
