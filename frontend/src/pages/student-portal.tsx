@@ -29,8 +29,7 @@ import { useAuth } from "../features/auth/auth-context";
 import { api } from "../lib/api";
 import {
   academicYearSortValue,
-  buildStudentFeeOverview,
-  resolveStudentFeeAcademicYearId,
+  buildStudentPortalFeeOverview,
 } from "../lib/fee-metrics";
 import { printReceipt } from "../lib/print-receipt";
 import { supabase } from "../lib/supabase";
@@ -97,13 +96,9 @@ async function loadPortal(studentId: string) {
       payments: any[];
       settings: any;
     };
-    const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    const feeOverview = buildStudentPortalFeeOverview(
       data.summaries ?? [],
       data.year.id,
-    );
-    const feeOverview = buildStudentFeeOverview(
-      data.summaries ?? [],
-      targetAcademicYearId,
     );
     if (!feeOverview.activeSummary) {
       throw new Error("No fee summary found for the latest configured PTA semester");
@@ -153,13 +148,9 @@ async function loadPortal(studentId: string) {
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+  const feeOverview = buildStudentPortalFeeOverview(
     summaries ?? [],
     year.id,
-  );
-  const feeOverview = buildStudentFeeOverview(
-    summaries ?? [],
-    targetAcademicYearId,
   );
   if (!feeOverview.activeSummary) {
     throw new Error("No fee summary found for the latest configured PTA semester");
@@ -558,5 +549,9 @@ function Info({
     </div>
   );
 }
+
+
+
+
 
 

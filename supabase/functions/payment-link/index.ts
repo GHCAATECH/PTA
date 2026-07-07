@@ -205,6 +205,54 @@ function buildStudentFeeOverview(
   };
 }
 
+function buildStudentPortalFeeOverview(
+  rows: Array<{
+    academic_year_id: string;
+    year?: string | null;
+    fee_amount?: number | string | null;
+    total_paid?: number | string | null;
+    outstanding_balance?: number | string | null;
+  }>,
+  activeAcademicYearId: string,
+) {
+  const numeric = (value: number | string | null | undefined) => Number(value ?? 0);
+  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    rows,
+    activeAcademicYearId,
+  );
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === targetAcademicYearId) ?? null;
+
+  const activeExpected = numeric(activeSummary?.fee_amount);
+  const activeCollected = numeric(activeSummary?.total_paid);
+  const totalConfiguredFees = rows.reduce(
+    (sum, row) => sum + numeric(row.fee_amount),
+    0,
+  );
+  const totalCollected = rows.reduce(
+    (sum, row) => sum + numeric(row.total_paid),
+    0,
+  );
+  const previousConfiguredFees = Math.max(totalConfiguredFees - activeExpected, 0);
+  const previousCollected = Math.max(totalCollected - activeCollected, 0);
+  const previousOutstanding = Math.max(
+    previousConfiguredFees - previousCollected,
+    0,
+  );
+  const totalPayable = activeExpected + previousOutstanding;
+  const totalDebt = Math.max(totalConfiguredFees - totalCollected, 0);
+
+  return {
+    activeSummary,
+    activeExpected,
+    activeCollected,
+    activeOutstanding: totalDebt,
+    previousOutstanding,
+    totalPayable,
+    totalDebt,
+  };
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("en-GH", {
     style: "currency",
@@ -731,7 +779,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Online payment is disabled" }, 400);
 
     const studentName = `${student.first_name} ${student.last_name}`.trim();
-    const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    const feeOverview = buildStudentPortalFeeOverview(
       summaries as Array<{
         academic_year_id: string;
         year?: string | null;
@@ -740,16 +788,6 @@ Deno.serve(async (req: Request) => {
         outstanding_balance?: number | string | null;
       }>,
       year.id,
-    );
-    const feeOverview = buildStudentFeeOverview(
-      summaries as Array<{
-        academic_year_id: string;
-        year?: string | null;
-        fee_amount?: number | string | null;
-        total_paid?: number | string | null;
-        outstanding_balance?: number | string | null;
-      }>,
-      targetAcademicYearId,
     );
     if (!feeOverview.activeSummary) {
       throw new Error("No fee summary found for the latest configured PTA semester");
@@ -907,6 +945,10 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 400);
   }
 });
+
+
+
+
 
 
 

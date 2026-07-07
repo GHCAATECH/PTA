@@ -93,6 +93,58 @@ export function buildStudentFeeOverview(
   };
 }
 
+export function buildStudentPortalFeeOverview(
+  rows: FeeSummaryLike[],
+  activeAcademicYearId: string,
+) {
+  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+    rows,
+    activeAcademicYearId,
+  );
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === targetAcademicYearId) ?? null;
+
+  const activeExpected = numeric(activeSummary?.fee_amount);
+  const activeCollected = numeric(activeSummary?.total_paid);
+  const totalConfiguredFees = rows.reduce(
+    (sum, row) => sum + numeric(row.fee_amount),
+    0,
+  );
+  const totalCollected = rows.reduce(
+    (sum, row) => sum + numeric(row.total_paid),
+    0,
+  );
+  const previousConfiguredFees = Math.max(totalConfiguredFees - activeExpected, 0);
+  const previousCollected = Math.max(totalCollected - activeCollected, 0);
+  const previousOutstanding = Math.max(
+    previousConfiguredFees - previousCollected,
+    0,
+  );
+  const totalPayable = activeExpected + previousOutstanding;
+  const totalDebt = Math.max(totalConfiguredFees - totalCollected, 0);
+  const overallStatus: PaymentStatus =
+    totalDebt <= 0
+      ? "PAID"
+      : totalCollected > 0
+        ? "PARTIALLY PAID"
+        : "UNPAID";
+
+  return {
+    activeSummary,
+    activeExpected,
+    activeCollected,
+    activeOutstanding: totalDebt,
+    previousOutstanding,
+    arrears: previousOutstanding,
+    totalPayable,
+    totalDebt,
+    totalOutstanding: totalDebt,
+    totalConfiguredFees,
+    totalCollected,
+    overallStatus,
+  };
+}
+
 export function buildDashboardMetrics(
   summaries: FeeSummaryLike[],
   payments: PaymentLike[],
@@ -176,4 +228,5 @@ export function buildDashboardMetrics(
     studentStates,
   };
 }
+
 

@@ -30,8 +30,7 @@ import { adminUsers } from "../lib/admin-users";
 import { supabase } from "../lib/supabase";
 import { printReceipt } from "../lib/print-receipt";
 import {
-  buildStudentFeeOverview,
-  resolveStudentFeeAcademicYearId,
+  buildStudentPortalFeeOverview,
 } from "../lib/fee-metrics";
 import { money, shortDate } from "../lib/utils";
 import type { Payment, Student } from "../types";
@@ -69,13 +68,9 @@ async function loadStudent(id: string) {
   if (studentError) throw studentError;
   if (summaryError) throw summaryError;
   if (paymentsError) throw paymentsError;
-  const targetAcademicYearId = resolveStudentFeeAcademicYearId(
+  const feeOverview = buildStudentPortalFeeOverview(
     (summaries ?? []) as any[],
     year.id,
-  );
-  const feeOverview = buildStudentFeeOverview(
-    (summaries ?? []) as any[],
-    targetAcademicYearId,
   );
   if (!feeOverview.activeSummary) {
     throw new Error("No fee summary found for the latest configured PTA semester");
@@ -542,6 +537,10 @@ const Summary = ({
     </p>
   </Card>
 );
+
+
+
+
 
 
 
