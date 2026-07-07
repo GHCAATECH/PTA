@@ -119,10 +119,10 @@ export function buildDashboardMetrics(
     (sum, student) => sum + student.activeExpected,
     0,
   );
-  const total_collected = studentStates.reduce(
-    (sum, student) => sum + student.activeCollected,
-    0,
-  );
+  const total_collected = payments.reduce((sum, payment) => {
+    if (payment.academic_year_id !== activeAcademicYearId) return sum;
+    return sum + numeric(payment.amount_paid);
+  }, 0);
   const outstanding = studentStates.reduce(
     (sum, student) => sum + student.previousOutstanding,
     0,
@@ -149,3 +149,4 @@ export function buildDashboardMetrics(
     studentStates,
   };
 }
+
