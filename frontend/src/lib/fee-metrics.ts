@@ -38,16 +38,20 @@ export function buildStudentFeeOverview(
   const activeSummary =
     rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
   const activeSort = academicYearSortValue(activeSummary?.year);
-  const previousOutstanding = rows
-    .filter(
-      (row) =>
-        row.academic_year_id !== activeAcademicYearId &&
-        academicYearSortValue(row.year) < activeSort,
-    )
-    .reduce((sum, row) => sum + numeric(row.outstanding_balance), 0);
+  const previousRows = rows.filter(
+    (row) =>
+      row.academic_year_id !== activeAcademicYearId &&
+      academicYearSortValue(row.year) < activeSort,
+  );
+  const previousBaseOutstanding = previousRows.reduce(
+    (sum, row) => sum + Math.max(numeric(row.fee_amount) - numeric(row.total_paid), 0),
+    0,
+  );
   const activeExpected = numeric(activeSummary?.fee_amount);
   const activeCollected = numeric(activeSummary?.total_paid);
-  const activeOutstanding = numeric(activeSummary?.outstanding_balance);
+  const activeOutstanding = Math.max(activeExpected - activeCollected, 0);
+  const overflowToPrevious = Math.max(activeCollected - activeExpected, 0);
+  const previousOutstanding = Math.max(previousBaseOutstanding - overflowToPrevious, 0);
   const totalOutstanding = activeOutstanding + previousOutstanding;
   const totalDebt = totalOutstanding;
   const hasAnyPayment = rows.some((row) => numeric(row.total_paid) > 0);

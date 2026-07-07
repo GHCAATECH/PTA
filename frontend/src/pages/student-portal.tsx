@@ -71,7 +71,7 @@ function buildPortalHistory(
       amount_paid: numeric(summary.total_paid),
       payment_date: new Date().toISOString(),
       payment_method: "recorded_total",
-      receipt_number: `Recorded total · ${summary.year ?? "History"}`,
+      receipt_number: `Recorded total - ${summary.year ?? "History"}`,
       remarks: "Existing payment total carried from recorded history",
       received_by_name: "School records",
       total_paid: numeric(summary.total_paid),
@@ -534,6 +534,7 @@ function Info({
     </div>
   );
 }
+
 
 
 
