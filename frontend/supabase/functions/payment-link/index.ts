@@ -149,24 +149,46 @@ function buildStudentFeeOverview(
   activeAcademicYearId: string,
 ) {
   const numeric = (value: number | string | null | undefined) => Number(value ?? 0);
-  const activeSummary =
-    rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
-  const activeSort = academicYearSortValue(activeSummary?.year);
-  const previousRows = rows.filter(
-    (row) =>
-      row.academic_year_id !== activeAcademicYearId &&
-      academicYearSortValue(row.year) < activeSort,
+  const sortedRows = [...rows].sort(
+    (a, b) => academicYearSortValue(a.year) - academicYearSortValue(b.year),
   );
-  const previousBaseOutstanding = previousRows.reduce(
-    (sum, row) => sum + Math.max(numeric(row.fee_amount) - numeric(row.total_paid), 0),
-    0,
-  );
-  const activeExpected = numeric(activeSummary?.fee_amount);
-  const activeCollected = numeric(activeSummary?.total_paid);
-  const activeOutstanding = Math.max(activeExpected - activeCollected, 0);
-  const overflowToPrevious = Math.max(activeCollected - activeExpected, 0);
-  const previousOutstanding = Math.max(previousBaseOutstanding - overflowToPrevious, 0);
-  const totalDebt = activeOutstanding + previousOutstanding;
+
+  let previousOutstandingDisplay = 0;
+  let previousTotalDebt = 0;
+  let activeSummary = null;
+  let activeExpected = 0;
+  let activeCollected = 0;
+  let activeOutstanding = 0;
+  let previousOutstanding = 0;
+  let totalDebt = 0;
+
+  for (const row of sortedRows) {
+    const expected = numeric(row.fee_amount);
+    const collected = numeric(row.total_paid);
+    const hasConfiguredFee = expected > 0;
+
+    const carriedOutstanding = hasConfiguredFee
+      ? previousTotalDebt
+      : previousOutstandingDisplay;
+    const rowTotalDebt = hasConfiguredFee
+      ? Math.max(carriedOutstanding + expected - collected, 0)
+      : Math.max(previousTotalDebt - collected, 0);
+    const rowActiveOutstanding = hasConfiguredFee
+      ? Math.max(rowTotalDebt - carriedOutstanding, 0)
+      : 0;
+
+    if (row.academic_year_id === activeAcademicYearId) {
+      activeSummary = row;
+      activeExpected = expected;
+      activeCollected = collected;
+      activeOutstanding = rowActiveOutstanding;
+      previousOutstanding = carriedOutstanding;
+      totalDebt = rowTotalDebt;
+    }
+
+    previousOutstandingDisplay = carriedOutstanding;
+    previousTotalDebt = rowTotalDebt;
+  }
 
   return {
     activeSummary,
@@ -870,6 +892,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 400);
   }
 });
+
 
 
 
