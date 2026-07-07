@@ -128,6 +128,52 @@ function normalizeSenderName(value: string) {
   return cleaned.slice(0, 11);
 }
 
+function academicYearSortValue(value: string | null | undefined) {
+  const match = String(value ?? "")
+    .trim()
+    .match(/^(\d{4})\/(\d{4})(?:\s*-\s*Semester\s*(\d+))?/i);
+  if (!match) return 0;
+  const startYear = Number(match[1] ?? 0);
+  const semester = Number(match[3] ?? 0);
+  return startYear * 10 + semester;
+}
+
+function buildStudentFeeOverview(
+  rows: Array<{
+    academic_year_id: string;
+    year?: string | null;
+    fee_amount?: number | string | null;
+    total_paid?: number | string | null;
+    outstanding_balance?: number | string | null;
+  }>,
+  activeAcademicYearId: string,
+) {
+  const numeric = (value: number | string | null | undefined) => Number(value ?? 0);
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
+  const activeSort = academicYearSortValue(activeSummary?.year);
+  const previousOutstanding = rows
+    .filter(
+      (row) =>
+        row.academic_year_id !== activeAcademicYearId &&
+        academicYearSortValue(row.year) < activeSort,
+    )
+    .reduce((sum, row) => sum + numeric(row.outstanding_balance), 0);
+  const activeExpected = numeric(activeSummary?.fee_amount);
+  const activeCollected = numeric(activeSummary?.total_paid);
+  const activeOutstanding = numeric(activeSummary?.outstanding_balance);
+  const totalDebt = activeOutstanding + previousOutstanding;
+
+  return {
+    activeSummary,
+    activeExpected,
+    activeCollected,
+    activeOutstanding,
+    previousOutstanding,
+    totalDebt,
+  };
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("en-GH", {
     style: "currency",
@@ -578,7 +624,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Authentication required" }, 401);
 
     const body = (await req.json().catch(() => ({}))) as {
-      action?: "initialize" | "verify";
+      action?: "initialize" | "verify" | "portal";
       amount?: number;
       reference?: string;
     };
@@ -622,9 +668,9 @@ Deno.serve(async (req: Request) => {
     if (yearError || !year)
       throw yearError ?? new Error("Active academic year not found");
 
-    const [
+        const [
       { data: student, error: studentError },
-      { data: summary, error: summaryError },
+      { data: summaries, error: summaryError },
       { data: settings, error: settingsError },
     ] = await Promise.all([
       admin
@@ -634,10 +680,9 @@ Deno.serve(async (req: Request) => {
         .single(),
       admin
         .from("student_fee_summary")
-        .select("outstanding_balance,total_paid,fee_amount")
+        .select("academic_year_id,year,fee_amount,total_paid,outstanding_balance")
         .eq("student_id", account.student_id)
-        .eq("academic_year_id", year.id)
-        .single(),
+        .order("year"),
       admin
         .from("school_settings")
         .select("online_payment_enabled,school_name,pta_name,email,phone,sms_enabled,sms_sender_name,sms_alert_template")
@@ -647,7 +692,7 @@ Deno.serve(async (req: Request) => {
 
     if (studentError || !student)
       throw studentError ?? new Error("Student record not found");
-    if (summaryError || !summary)
+    if (summaryError || !summaries?.length)
       throw summaryError ?? new Error("Student summary not found");
     if (settingsError || !settings)
       throw settingsError ?? new Error("School settings not found");
@@ -655,8 +700,37 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Online payment is disabled" }, 400);
 
     const studentName = `${student.first_name} ${student.last_name}`.trim();
-    const balance = Number(summary.outstanding_balance ?? 0);
-    const feeAmount = Number((summary as { fee_amount?: number | string }).fee_amount ?? 0);
+    const feeOverview = buildStudentFeeOverview(
+      summaries as Array<{
+        academic_year_id: string;
+        year?: string | null;
+        fee_amount?: number | string | null;
+        total_paid?: number | string | null;
+        outstanding_balance?: number | string | null;
+      }>,
+      year.id,
+    );
+    if (!feeOverview.activeSummary) {
+      throw new Error("No fee summary found for the active semester");
+    }
+    const balance = Number(feeOverview.totalDebt ?? 0);
+    const feeAmount = Number(feeOverview.activeExpected ?? 0);
+    if (body.action === "portal") {
+      const { data: payments, error: paymentsError } = await admin
+        .from("payment_receipts")
+        .select("*")
+        .eq("student_id", student.id)
+        .order("payment_date", { ascending: false });
+      if (paymentsError) throw paymentsError;
+
+      return json({
+        year,
+        student,
+        summaries,
+        payments: payments ?? [],
+        settings,
+      });
+    }
 
     if (body.action === "verify") {
       if (!paystackSecretKey)
@@ -703,7 +777,7 @@ Deno.serve(async (req: Request) => {
     if (!Number.isFinite(numeric) || numeric <= 0)
       return json({ error: "Enter a valid payment amount" }, 422);
     if (numeric > balance)
-      return json({ error: "Amount cannot exceed outstanding balance" }, 422);
+      return json({ error: "Amount cannot exceed total debt" }, 422);
 
     if (paystackSecretKey) {
       const checkoutEmail =
@@ -792,3 +866,6 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 400);
   }
 });
+
+
+

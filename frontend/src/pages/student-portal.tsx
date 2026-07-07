@@ -27,12 +27,58 @@ import {
 } from "../components/ui/card";
 import { useAuth } from "../features/auth/auth-context";
 import { api } from "../lib/api";
-import { buildStudentFeeOverview } from "../lib/fee-metrics";
+import { academicYearSortValue, buildStudentFeeOverview } from "../lib/fee-metrics";
 import { printReceipt } from "../lib/print-receipt";
 import { supabase } from "../lib/supabase";
 import { money, shortDate } from "../lib/utils";
 import type { Payment } from "../types";
 
+type PortalHistoryEntry = Payment & {
+  synthetic?: boolean;
+};
+
+function numeric(value: number | string | null | undefined) {
+  return Number(value ?? 0);
+}
+
+function buildPortalHistory(
+  payments: any[] | null | undefined,
+  summaries: any[] | null | undefined,
+) {
+  if ((payments ?? []).length) {
+    return (payments ?? []).map((payment: any) => ({
+      ...payment,
+      amount_paid: numeric(payment.amount_paid),
+      total_paid: numeric(payment.total_paid),
+      outstanding_balance: numeric(payment.outstanding_balance),
+    })) as PortalHistoryEntry[];
+  }
+
+  return (summaries ?? [])
+    .filter((summary: any) => numeric(summary.total_paid) > 0)
+    .sort(
+      (a: any, b: any) =>
+        academicYearSortValue(String(b.year ?? "")) -
+        academicYearSortValue(String(a.year ?? "")),
+    )
+    .map((summary: any) => ({
+      id: `summary-${summary.academic_year_id}`,
+      student_id: summary.student_id,
+      student_name: "",
+      admission_number: "",
+      class_name: summary.class_name ?? "",
+      academic_year: summary.year ?? "",
+      amount_paid: numeric(summary.total_paid),
+      payment_date: new Date().toISOString(),
+      payment_method: "recorded_total",
+      receipt_number: `Recorded total · ${summary.year ?? "History"}`,
+      remarks: "Existing payment total carried from recorded history",
+      received_by_name: "School records",
+      total_paid: numeric(summary.total_paid),
+      outstanding_balance: numeric(summary.outstanding_balance),
+      synthetic: true,
+    })) satisfies PortalHistoryEntry[];
+}
 async function loadPortal(studentId: string) {
   const portalResponse = await supabase.functions.invoke("payment-link", {
     body: { action: "portal" },
@@ -56,7 +102,7 @@ async function loadPortal(studentId: string) {
       student: data.student,
       summary: feeOverview.activeSummary,
       feeOverview,
-      payments: data.payments ?? [],
+      payments: buildPortalHistory(data.payments, data.summaries),
       settings: data.settings,
     };
   }
@@ -105,7 +151,7 @@ async function loadPortal(studentId: string) {
     student,
     summary: feeOverview.activeSummary,
     feeOverview,
-    payments: payments ?? [],
+    payments: buildPortalHistory(payments, summaries),
     settings,
   };
 }
@@ -376,7 +422,7 @@ export default function StudentPortal() {
             <CardContent className="px-0">
               {payments.length ? (
                 <div className="divide-y divide-slate-100 dark:divide-white/7">
-                  {payments.map((payment: any) => (
+                  {payments.map((payment: PortalHistoryEntry) => (
                     <div
                       key={payment.id}
                       className="flex items-center gap-3 px-5 py-4 sm:px-6"
@@ -488,6 +534,7 @@ function Info({
     </div>
   );
 }
+
 
 
 
