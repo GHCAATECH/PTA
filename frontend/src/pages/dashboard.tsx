@@ -161,7 +161,7 @@ export default function Dashboard() {
     {
       label: "Total debt",
       value: money(stats.total_debt),
-      detail: "Active expected fees plus previous outstanding",
+      detail: "Current amount still owed by students",
       icon: ReceiptText,
       tone: "rose",
     },

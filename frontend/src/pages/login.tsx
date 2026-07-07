@@ -53,7 +53,7 @@ export default function Login() {
           </p>
         </div>
         <p className="relative text-xs text-indigo-200">
-          Secure access Â· Database-enforced permissions Â· Complete audit trail
+          Secure access | Database-enforced permissions | Complete audit trail
         </p>
       </section>
 
@@ -76,7 +76,8 @@ export default function Login() {
           </h2>
           <p className="mt-2 text-sm text-slate-500">
             Sign in with your administrator or accountant account.
-          </p>`r`n          <form
+          </p>
+          <form
             className="mt-7 space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
@@ -128,7 +129,7 @@ export default function Login() {
             </label>
             <Button className="w-full" disabled={busy}>
               {busy ? (
-                "Signing inâ€¦"
+                "Signing in..."
               ) : (
                 <>
                   Sign in securely <ArrowRight size={17} />

@@ -205,7 +205,7 @@ export default function StudentPortal() {
                 Welcome, {student.first_name}.
               </h1>
               <p className="mt-1 text-sm text-indigo-100">
-                {student.admission_number} ? {student.classes?.name}
+                {student.admission_number} | {student.classes?.name}
               </p>
             </div>
           </div>
@@ -231,8 +231,8 @@ export default function StudentPortal() {
           />
           <Summary
             icon={ReceiptText}
-            label="Outstanding"
-            value={money(feeOverview.previousOutstanding)}
+            label="Outstanding balance"
+            value={money(feeOverview.activeOutstanding)}
             tone="amber"
           />
           <Summary
@@ -362,7 +362,7 @@ export default function StudentPortal() {
                           {money(Number(payment.amount_paid))}
                         </p>
                         <p className="truncate text-[11px] text-slate-500">
-                          {payment.receipt_number} Ãƒâ€šÃ‚Â·{" "}
+                          {payment.receipt_number} |{" "}
                           {shortDate(payment.payment_date)}
                         </p>
                       </div>

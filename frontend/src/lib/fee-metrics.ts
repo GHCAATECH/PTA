@@ -48,8 +48,8 @@ export function buildStudentFeeOverview(
   const activeExpected = numeric(activeSummary?.fee_amount);
   const activeCollected = numeric(activeSummary?.total_paid);
   const activeOutstanding = numeric(activeSummary?.outstanding_balance);
-  const totalDebt = activeExpected + previousOutstanding;
   const totalOutstanding = activeOutstanding + previousOutstanding;
+  const totalDebt = totalOutstanding;
   const hasAnyPayment = rows.some((row) => numeric(row.total_paid) > 0);
   const overallStatus: PaymentStatus =
     totalOutstanding <= 0
@@ -123,7 +123,10 @@ export function buildDashboardMetrics(
     (sum, student) => sum + student.previousOutstanding,
     0,
   );
-  const total_debt = total_expected + outstanding;
+  const total_debt = studentStates.reduce(
+    (sum, student) => sum + student.totalOutstanding,
+    0,
+  );
   const fully_paid = studentStates.filter(
     (student) => student.totalOutstanding <= 0,
   ).length;
