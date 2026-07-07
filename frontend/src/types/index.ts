@@ -55,6 +55,8 @@ export interface DashboardStats {
   total_students: number;
   total_expected: number;
   total_collected: number;
+  arrears: number;
+  total_payable: number;
   outstanding: number;
   total_debt: number;
   fully_paid: number;

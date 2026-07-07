@@ -79,6 +79,7 @@ function buildPortalHistory(
       synthetic: true,
     })) satisfies PortalHistoryEntry[];
 }
+
 async function loadPortal(studentId: string) {
   const portalResponse = await supabase.functions.invoke("payment-link", {
     body: { action: "portal" },
@@ -155,7 +156,6 @@ async function loadPortal(studentId: string) {
     settings,
   };
 }
-
 
 export default function StudentPortal() {
   const { studentAccount, signOut } = useAuth();
@@ -287,8 +287,8 @@ export default function StudentPortal() {
         <section
           className={`grid gap-4 ${
             settings?.online_payment_enabled && hasOutstandingBalance
-              ? "sm:grid-cols-2 xl:grid-cols-4"
-              : "sm:grid-cols-3"
+              ? "sm:grid-cols-2 xl:grid-cols-6"
+              : "sm:grid-cols-2 xl:grid-cols-5"
           }`}
         >
           <Summary
@@ -298,19 +298,25 @@ export default function StudentPortal() {
           />
           <Summary
             icon={CheckCircle2}
-            label="Total collected"
+            label="Collected"
             value={money(feeOverview.activeCollected)}
             tone="emerald"
           />
           <Summary
             icon={ReceiptText}
-            label="Outstanding"
-            value={money(feeOverview.previousOutstanding)}
+            label="Arrears"
+            value={money(feeOverview.arrears ?? feeOverview.previousOutstanding)}
             tone="amber"
           />
           <Summary
             icon={ShieldCheck}
-            label="Total debt"
+            label="Total payable"
+            value={money(feeOverview.totalPayable ?? feeOverview.totalDebt)}
+            tone="indigo"
+          />
+          <Summary
+            icon={ShieldCheck}
+            label="Outstanding"
             value={money(feeOverview.totalDebt)}
             tone="amber"
           />
@@ -328,7 +334,7 @@ export default function StudentPortal() {
                     Pay from your dashboard
                   </p>
                   <p className="mt-1 text-sm text-indigo-100">
-                    Enter any amount up to your total debt, pay online,
+                    Enter any amount up to your outstanding balance, pay online,
                     and return here automatically after success.
                   </p>
                 </div>
@@ -396,14 +402,14 @@ export default function StudentPortal() {
                 <p className="text-xs text-slate-500">Payment status</p>
                 <Badge
                   className={`mt-2 ${
-                    summary.payment_status === "PAID"
+                    feeOverview.overallStatus === "PAID"
                       ? "bg-emerald-50 text-emerald-700"
-                      : summary.payment_status === "UNPAID"
+                      : feeOverview.overallStatus === "UNPAID"
                         ? "bg-rose-50 text-rose-700"
                         : "bg-amber-50 text-amber-700"
                   }`}
                 >
-                  {summary.payment_status}
+                  {feeOverview.overallStatus}
                 </Badge>
               </div>
             </CardContent>
@@ -534,8 +540,3 @@ function Info({
     </div>
   );
 }
-
-
-
-
-

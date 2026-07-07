@@ -217,23 +217,28 @@ export default function StudentProfile() {
           </CardContent>
         </Card>
         <div className="space-y-6">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Summary
               label="Expected fees"
               value={money(feeOverview.activeExpected)}
             />
             <Summary
-              label="Total paid"
+              label="Collected"
               value={money(feeOverview.activeCollected)}
               green
             />
             <Summary
-              label="Outstanding"
-              value={money(feeOverview.previousOutstanding)}
+              label="Arrears"
+              value={money(feeOverview.arrears ?? feeOverview.previousOutstanding)}
               amber
             />
             <Summary
-              label="Total debt"
+              label="Total payable"
+              value={money(feeOverview.totalPayable ?? feeOverview.totalDebt)}
+              amber
+            />
+            <Summary
+              label="Outstanding"
               value={money(feeOverview.totalDebt)}
               amber
             />
@@ -527,6 +532,8 @@ const Summary = ({
     </p>
   </Card>
 );
+
+
 
 
 

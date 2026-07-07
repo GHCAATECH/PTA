@@ -149,53 +149,29 @@ function buildStudentFeeOverview(
   activeAcademicYearId: string,
 ) {
   const numeric = (value: number | string | null | undefined) => Number(value ?? 0);
-  const sortedRows = [...rows].sort(
-    (a, b) => academicYearSortValue(a.year) - academicYearSortValue(b.year),
-  );
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
+  const activeSort = academicYearSortValue(activeSummary?.year);
+  const previousOutstanding = rows
+    .filter(
+      (row) =>
+        row.academic_year_id !== activeAcademicYearId &&
+        academicYearSortValue(row.year) < activeSort,
+    )
+    .reduce((sum, row) => sum + numeric(row.outstanding_balance), 0);
 
-  let previousOutstandingDisplay = 0;
-  let previousTotalDebt = 0;
-  let activeSummary = null;
-  let activeExpected = 0;
-  let activeCollected = 0;
-  let activeOutstanding = 0;
-  let previousOutstanding = 0;
-  let totalDebt = 0;
-
-  for (const row of sortedRows) {
-    const expected = numeric(row.fee_amount);
-    const collected = numeric(row.total_paid);
-    const hasConfiguredFee = expected > 0;
-
-    const carriedOutstanding = hasConfiguredFee
-      ? previousTotalDebt
-      : previousOutstandingDisplay;
-    const rowTotalDebt = hasConfiguredFee
-      ? Math.max(carriedOutstanding + expected - collected, 0)
-      : Math.max(previousTotalDebt - collected, 0);
-    const rowActiveOutstanding = hasConfiguredFee
-      ? Math.max(rowTotalDebt - carriedOutstanding, 0)
-      : 0;
-
-    if (row.academic_year_id === activeAcademicYearId) {
-      activeSummary = row;
-      activeExpected = expected;
-      activeCollected = collected;
-      activeOutstanding = rowActiveOutstanding;
-      previousOutstanding = carriedOutstanding;
-      totalDebt = rowTotalDebt;
-    }
-
-    previousOutstandingDisplay = carriedOutstanding;
-    previousTotalDebt = rowTotalDebt;
-  }
+  const activeExpected = numeric(activeSummary?.fee_amount);
+  const activeCollected = numeric(activeSummary?.total_paid);
+  const totalPayable = activeExpected + previousOutstanding;
+  const totalDebt = Math.max(totalPayable - activeCollected, 0);
 
   return {
     activeSummary,
     activeExpected,
     activeCollected,
-    activeOutstanding,
+    activeOutstanding: totalDebt,
     previousOutstanding,
+    totalPayable,
     totalDebt,
   };
 }
@@ -892,6 +868,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 400);
   }
 });
+
 
 
 

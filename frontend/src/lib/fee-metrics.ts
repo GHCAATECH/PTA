@@ -35,51 +35,25 @@ export function buildStudentFeeOverview(
   rows: FeeSummaryLike[],
   activeAcademicYearId: string,
 ) {
-  const sortedRows = [...rows].sort(
-    (a, b) => academicYearSortValue(a.year) - academicYearSortValue(b.year),
-  );
+  const activeSummary =
+    rows.find((row) => row.academic_year_id === activeAcademicYearId) ?? null;
+  const activeSort = academicYearSortValue(activeSummary?.year);
+  const previousOutstanding = rows
+    .filter(
+      (row) =>
+        row.academic_year_id !== activeAcademicYearId &&
+        academicYearSortValue(row.year) < activeSort,
+    )
+    .reduce((sum, row) => sum + numeric(row.outstanding_balance), 0);
 
-  let previousOutstandingDisplay = 0;
-  let previousTotalDebt = 0;
-  let activeSummary: FeeSummaryLike | null = null;
-  let activeExpected = 0;
-  let activeCollected = 0;
-  let activeOutstanding = 0;
-  let previousOutstanding = 0;
-  let totalDebt = 0;
-
-  for (const row of sortedRows) {
-    const expected = numeric(row.fee_amount);
-    const collected = numeric(row.total_paid);
-    const hasConfiguredFee = expected > 0;
-
-    const carriedOutstanding = hasConfiguredFee
-      ? previousTotalDebt
-      : previousOutstandingDisplay;
-    const rowTotalDebt = hasConfiguredFee
-      ? Math.max(carriedOutstanding + expected - collected, 0)
-      : Math.max(previousTotalDebt - collected, 0);
-    const rowActiveOutstanding = hasConfiguredFee
-      ? Math.max(rowTotalDebt - carriedOutstanding, 0)
-      : 0;
-
-    if (row.academic_year_id === activeAcademicYearId) {
-      activeSummary = row;
-      activeExpected = expected;
-      activeCollected = collected;
-      activeOutstanding = rowActiveOutstanding;
-      previousOutstanding = carriedOutstanding;
-      totalDebt = rowTotalDebt;
-    }
-
-    previousOutstandingDisplay = carriedOutstanding;
-    previousTotalDebt = rowTotalDebt;
-  }
-
+  const activeExpected = numeric(activeSummary?.fee_amount);
+  const activeCollected = numeric(activeSummary?.total_paid);
+  const totalPayable = activeExpected + previousOutstanding;
+  const totalDebt = Math.max(totalPayable - activeCollected, 0);
   const overallStatus: PaymentStatus =
     totalDebt <= 0
       ? "PAID"
-      : sortedRows.some((row) => numeric(row.total_paid) > 0)
+      : rows.some((row) => numeric(row.total_paid) > 0)
         ? "PARTIALLY PAID"
         : "UNPAID";
 
@@ -87,8 +61,10 @@ export function buildStudentFeeOverview(
     activeSummary,
     activeExpected,
     activeCollected,
-    activeOutstanding,
+    activeOutstanding: totalDebt,
     previousOutstanding,
+    arrears: previousOutstanding,
+    totalPayable,
     totalDebt,
     totalOutstanding: totalDebt,
     overallStatus,
@@ -118,6 +94,8 @@ export function buildDashboardMetrics(
       activeCollected: overview.activeCollected,
       activeOutstanding: overview.activeOutstanding,
       previousOutstanding: overview.previousOutstanding,
+      arrears: overview.arrears,
+      totalPayable: overview.totalPayable,
       totalDebt: overview.totalDebt,
       totalOutstanding: overview.totalOutstanding,
     };
@@ -140,32 +118,37 @@ export function buildDashboardMetrics(
     (sum, student) => sum + student.activeExpected,
     0,
   );
-  const total_collected = payments.reduce((sum, payment) => {
-    if (payment.academic_year_id !== activeAcademicYearId) return sum;
-    return sum + numeric(payment.amount_paid);
-  }, 0);
-  const outstanding = studentStates.reduce(
-    (sum, student) => sum + student.previousOutstanding,
+  const total_collected = studentStates.reduce(
+    (sum, student) => sum + student.activeCollected,
     0,
   );
-  const total_debt = studentStates.reduce(
-    (sum, student) => sum + student.totalOutstanding,
+  const arrears = studentStates.reduce(
+    (sum, student) => sum + student.arrears,
+    0,
+  );
+  const total_payable = studentStates.reduce(
+    (sum, student) => sum + student.totalPayable,
+    0,
+  );
+  const outstanding = studentStates.reduce(
+    (sum, student) => sum + student.totalDebt,
     0,
   );
   const fully_paid = studentStates.filter(
-    (student) => student.totalOutstanding <= 0,
+    (student) => student.totalDebt <= 0,
   ).length;
-  const owing = Math.max(studentStates.length - fully_paid, 0);
 
   return {
     stats: {
       total_students: studentStates.length,
       total_expected,
       total_collected,
+      arrears,
+      total_payable,
       outstanding,
-      total_debt,
+      total_debt: outstanding,
       fully_paid,
-      owing,
+      owing: Math.max(studentStates.length - fully_paid, 0),
       today_collected: todayCollected,
     } satisfies DashboardStats,
     studentStates,

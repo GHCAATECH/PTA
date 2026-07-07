@@ -60,10 +60,13 @@ const tones: Record<string, string> = {
   teal: "bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-300",
   rose: "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300",
 };
+
 const emptyStats: DashboardStats = {
   total_students: 0,
   total_expected: 0,
   total_collected: 0,
+  arrears: 0,
+  total_payable: 0,
   outstanding: 0,
   total_debt: 0,
   fully_paid: 0,
@@ -125,8 +128,8 @@ export default function Dashboard() {
         color: "#f59e0b",
       },
     ];
-  const rate = stats.total_expected
-      ? Math.round((stats.total_collected / stats.total_expected) * 100)
+  const rate = stats.total_payable
+      ? Math.round((stats.total_collected / stats.total_payable) * 100)
       : 0,
     firstName = profile?.full_name?.split(" ")[0] ?? "Administrator";
   const metrics = [
@@ -140,28 +143,35 @@ export default function Dashboard() {
     {
       label: "Expected fees",
       value: money(stats.total_expected),
-      detail: "Configured PTA fees",
+      detail: "Current term fees",
       icon: CircleDollarSign,
       tone: "blue",
     },
     {
-      label: "Total collected",
+      label: "Collected",
       value: money(stats.total_collected),
-      detail: `${rate}% collection rate`,
+      detail: `${rate}% of total payable`,
       icon: Banknote,
       tone: "emerald",
     },
     {
-      label: "Outstanding",
-      value: money(stats.outstanding),
-      detail: "Unpaid balance from previous semesters",
+      label: "Arrears",
+      value: money(stats.arrears),
+      detail: "Previous unpaid balance",
       icon: WalletCards,
       tone: "amber",
     },
     {
-      label: "Total debt",
-      value: money(stats.total_debt),
-      detail: "Current amount still owed by students",
+      label: "Total payable",
+      value: money(stats.total_payable),
+      detail: "Expected fees plus arrears",
+      icon: ReceiptText,
+      tone: "blue",
+    },
+    {
+      label: "Outstanding",
+      value: money(stats.outstanding),
+      detail: "Amount still owed after collections",
       icon: ReceiptText,
       tone: "rose",
     },
@@ -193,7 +203,7 @@ export default function Dashboard() {
               Good morning, {firstName}.
             </h2>
             <p className="mt-2 max-w-xl text-sm text-indigo-100">
-              Today's collections are{" "}
+              Today's collections are {" "}
               <strong className="text-white">
                 {money(stats.today_collected)}
               </strong>
@@ -208,7 +218,7 @@ export default function Dashboard() {
           </Link>
         </div>
       </section>
-      <section className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      <section className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         {metrics.map(({ label, value, detail, icon: Icon, tone }) => (
           <Card key={label} className="p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
@@ -444,6 +454,7 @@ export default function Dashboard() {
     </div>
   );
 }
+
 function buildMonthly(payments: Payment[]) {
   const map = new Map<
     string,
@@ -461,6 +472,7 @@ function buildMonthly(payments: Payment[]) {
   }
   return [...map.values()].sort((a, b) => a.time - b.time);
 }
+
 function buildClasses(payments: Payment[]) {
   const map = new Map<string, number>();
   for (const p of payments)
@@ -470,6 +482,7 @@ function buildClasses(payments: Payment[]) {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 8);
 }
+
 function ChartEmpty() {
   return (
     <div className="grid h-full place-items-center text-center text-xs text-slate-500">
@@ -477,6 +490,7 @@ function ChartEmpty() {
     </div>
   );
 }
+
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
