@@ -131,22 +131,29 @@ export function buildDashboardMetrics(
     (sum, student) => sum + student.totalOutstanding,
     0,
   );
-  const fully_paid = studentStates.filter(
-    (student) => student.totalOutstanding <= 0,
-  ).length;
+  const hasActiveFeeConfigured = total_expected > 0;
+  const effectiveOutstanding = hasActiveFeeConfigured ? outstanding : 0;
+  const effectiveTotalDebt = hasActiveFeeConfigured ? total_debt : 0;
+  const fully_paid = hasActiveFeeConfigured
+    ? studentStates.filter((student) => student.totalOutstanding <= 0).length
+    : studentStates.length;
+  const owing = hasActiveFeeConfigured
+    ? Math.max(studentStates.length - fully_paid, 0)
+    : 0;
 
   return {
     stats: {
       total_students: studentStates.length,
       total_expected,
       total_collected,
-      outstanding,
-      total_debt,
+      outstanding: effectiveOutstanding,
+      total_debt: effectiveTotalDebt,
       fully_paid,
-      owing: Math.max(studentStates.length - fully_paid, 0),
+      owing,
       today_collected: todayCollected,
     } satisfies DashboardStats,
     studentStates,
   };
 }
+
 
