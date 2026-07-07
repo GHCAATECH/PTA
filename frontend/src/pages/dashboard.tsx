@@ -187,13 +187,13 @@ export default function Dashboard() {
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Badge className="mb-3 bg-white/15 text-white">
-              <CalendarDays size={12} /> Active year · {year}
+              <CalendarDays size={12} /> Active year | {year}
             </Badge>
             <h2 className="max-w-2xl text-2xl font-extrabold tracking-tight sm:text-3xl">
               Good morning, {firstName}.
             </h2>
             <p className="mt-2 max-w-xl text-sm text-indigo-100">
-              Today’s collections are{" "}
+              Today's collections are{" "}
               <strong className="text-white">
                 {money(stats.today_collected)}
               </strong>
@@ -373,7 +373,7 @@ export default function Dashboard() {
                         {p.student_name}
                       </p>
                       <p className="truncate text-[11px] text-slate-500">
-                        {p.receipt_number} · {p.class_name}
+                        {p.receipt_number} | {p.class_name}
                       </p>
                     </div>
                     <div className="text-right">
